@@ -4,7 +4,7 @@ interface ReportFormProps { shift: 'PAGI' | 'MALAM'; initialData?: any; onBack: 
 
 const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
 const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-const years = ['2025', '2026', '2027', '2028'];
+const years = ['2025', '2026', '2027', '2028', '2029', '2030', '2031', '2032', '2033', '2034', '2035', '2036', '2037', '2038', '2039', '2040'];
 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
@@ -18,7 +18,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState<'collage' | 'preview'>('collage');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [collageFormat, setCollageFormat] = useState<1 | 2 | 4 | 8>(4); 
+  ///const [collageFormat, setCollageFormat] = useState<1 | 2 | 4 | 8>(4); 
   const [slotImages, setSlotImages] = useState<string[][]>([[], [], [], []]); 
   const [finalCollages, setFinalCollages] = useState<string[]>(['', '', '', '']);
 
