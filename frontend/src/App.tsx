@@ -28,7 +28,7 @@ export default function App() {
   // === DITAMBAHKAN PENDETEKSI ERROR SAAT MENARIK DATA ===
   const fetchReports = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/reports?t=${new Date().getTime()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/reports?t=${new Date().getTime()}`, { cache: 'no-store' });
       if (!res.ok) {
         throw new Error('Gagal dari server');
       }
@@ -70,7 +70,7 @@ export default function App() {
     const payloadOnly = { status: newStatus, catatanAsmen: catatan };
 
     try {
-      const response = await fetch(`http://localhost:5000/api/reports/${report._id}`, {
+      const response = await fetch(`/api/reports/${report._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payloadOnly)
@@ -116,7 +116,7 @@ export default function App() {
   const deleteReport = async (id: string) => {
     if (window.confirm('Yakin ingin menghapus laporan ini? Tindakan ini permanen.')) {
       try {
-        const response = await fetch(`http://localhost:5000/api/reports/${id}`, { method: 'DELETE' });
+        const response = await fetch(`/api/reports/${id}`, { method: 'DELETE' });
         if (response.ok) setReports(reports.filter(r => r._id !== id));
       } catch (e) { alert('Tidak bisa terhubung ke server.'); }
     }

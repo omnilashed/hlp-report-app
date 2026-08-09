@@ -213,7 +213,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     };
 
     try {
-      const url = initialData?._id ? `http://localhost:5000/api/reports/${initialData._id}` : 'http://localhost:5000/api/reports';
+      const url = initialData?._id ? `/api/reports/${initialData._id}` : '/api/reports';
       const response = await fetch(url, { 
         method: initialData?._id ? 'PUT' : 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
