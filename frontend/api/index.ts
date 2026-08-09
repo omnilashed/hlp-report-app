@@ -31,37 +31,51 @@ const reportSchema = new mongoose.Schema({
 
 const Report = mongoose.models.Report || mongoose.model('Report', reportSchema);
 
+// Fungsi aman untuk koneksi Vercel Serverless
+async function connectDB() {
+  if (mongoose.connection.readyState >= 1) return;
+  await mongoose.connect(process.env.MONGO_URI as string);
+}
+
 app.post('/api/reports', async (req: Request, res: Response) => {
   try {
+    await connectDB();
     const newReport = new Report(req.body);
     await newReport.save();
     res.status(201).json({ message: 'Report saved successfully', data: newReport });
-  } catch (error) { res.status(500).json({ message: 'Error saving report', error }); }
+  } catch (error) { 
+    res.status(500).json({ message: 'Error saving report', error }); 
+  }
 });
 
 app.put('/api/reports/:id', async (req: Request, res: Response) => {
   try {
+    await connectDB();
     const updatedReport = await Report.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.status(200).json({ message: 'Report updated successfully', data: updatedReport });
-  } catch (error) { res.status(500).json({ message: 'Error updating report', error }); }
+  } catch (error) { 
+    res.status(500).json({ message: 'Error updating report', error }); 
+  }
 });
 
 app.get('/api/reports', async (req: Request, res: Response) => {
   try {
+    await connectDB();
     const reports = await Report.find().sort({ createdAt: -1 });
     res.status(200).json(reports);
-  } catch (error) { res.status(500).json({ message: 'Error fetching reports', error }); }
+  } catch (error) { 
+    res.status(500).json({ message: 'Error fetching reports', error }); 
+  }
 });
 
 app.delete('/api/reports/:id', async (req: Request, res: Response) => {
   try {
+    await connectDB();
     await Report.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: 'Report deleted successfully' });
-  } catch (error) { res.status(500).json({ message: 'Error deleting report', error }); }
+  } catch (error) { 
+    res.status(500).json({ message: 'Error deleting report', error }); 
+  }
 });
-
-mongoose.connect(process.env.MONGO_URI as string)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((err) => console.error('MongoDB error:', err));
 
 export default app;
