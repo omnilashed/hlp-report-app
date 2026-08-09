@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -31,7 +31,7 @@ const reportSchema = new mongoose.Schema({
 
 const Report = mongoose.models.Report || mongoose.model('Report', reportSchema);
 
-app.post('/api/reports', async (req, res) => {
+app.post('/api/reports', async (req: Request, res: Response) => {
   try {
     const newReport = new Report(req.body);
     await newReport.save();
@@ -39,21 +39,21 @@ app.post('/api/reports', async (req, res) => {
   } catch (error) { res.status(500).json({ message: 'Error saving report', error }); }
 });
 
-app.put('/api/reports/:id', async (req, res) => {
+app.put('/api/reports/:id', async (req: Request, res: Response) => {
   try {
     const updatedReport = await Report.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.status(200).json({ message: 'Report updated successfully', data: updatedReport });
   } catch (error) { res.status(500).json({ message: 'Error updating report', error }); }
 });
 
-app.get('/api/reports', async (req, res) => {
+app.get('/api/reports', async (req: Request, res: Response) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 });
     res.status(200).json(reports);
   } catch (error) { res.status(500).json({ message: 'Error fetching reports', error }); }
 });
 
-app.delete('/api/reports/:id', async (req, res) => {
+app.delete('/api/reports/:id', async (req: Request, res: Response) => {
   try {
     await Report.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: 'Report deleted successfully' });
