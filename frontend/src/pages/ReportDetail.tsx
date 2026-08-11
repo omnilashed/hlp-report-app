@@ -8,12 +8,11 @@ interface ReportDetailProps {
   handleApprove: (report: any) => void;
   handleReject: (report: any) => void;
   setCurrentView: (view: string) => void;
-  // PERUBAHAN: Menambahkan "| null" agar TypeScript tidak protes
   printLogbookRef: React.RefObject<HTMLDivElement | null>;
   printFasilitasRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export default function ReportDetail({ selectedReport, userRole, canSpvApprove, canAsmenApprove, handleApprove, handleReject, setCurrentView, printLogbookRef, printFasilitasRef }: ReportDetailProps) {
+export default function ReportDetail({ selectedReport, canSpvApprove, canAsmenApprove, handleApprove, handleReject, setCurrentView, printLogbookRef, printFasilitasRef }: ReportDetailProps) {
   if (!selectedReport) return null;
 
   return (
@@ -45,7 +44,7 @@ export default function ReportDetail({ selectedReport, userRole, canSpvApprove, 
             <>
               <button onClick={() => exportToWord(selectedReport)} className="flex-1 sm:flex-none px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md transition-all text-xs">Unduh Word</button>
               {selectedReport.kegiatan?.length > 0 && <button onClick={() => exportToExcel(selectedReport)} className="flex-1 sm:flex-none px-5 py-2.5 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 shadow-md transition-all text-xs">Unduh Excel</button>}
-              <button onClick={() => exportToPDF(printLogbookRef, 'LogBook', selectedReport)} className="flex-1 sm:flex-none px-5 py-2.5 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 shadow-md transition-all text-xs">Unduh PDF</button>
+              <button onClick={() => exportToPDF(selectedReport.kegiatan?.length > 0 ? printLogbookRef : printFasilitasRef, selectedReport.kegiatan?.length > 0 ? 'LogBook' : 'Fasilitas', selectedReport)} className="flex-1 sm:flex-none px-5 py-2.5 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 shadow-md transition-all text-xs">Unduh PDF</button>
             </>
           ) : (
             <div className="px-4 py-2 bg-slate-100 text-slate-400 rounded-xl text-xs font-bold border border-slate-200 flex items-center text-center">
