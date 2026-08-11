@@ -15,6 +15,7 @@ const reportSchema = new mongoose.Schema({
   dinas: { type: String, enum: ['PAGI', 'MALAM'], required: true },
   tanggal: { type: String, required: true },
   status: { type: String, default: 'Draft' },
+  catatanSpv: { type: String, default: '' },
   catatanAsmen: { type: String, default: '' },
   catatan: { type: String, default: '' },
   personil: {
@@ -31,7 +32,6 @@ const reportSchema = new mongoose.Schema({
 
 const Report = mongoose.models.Report || mongoose.model('Report', reportSchema);
 
-// Fungsi aman untuk koneksi Vercel Serverless
 async function connectDB() {
   if (mongoose.connection.readyState >= 1) return;
   await mongoose.connect(process.env.MONGO_URI as string);

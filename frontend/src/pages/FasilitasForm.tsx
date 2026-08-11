@@ -4,7 +4,7 @@ interface FasilitasFormProps { initialData?: any; onBack: () => void; }
 
 const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
 const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-const years = ['2025', '2026', '2027', '2028'];
+const years = ['2025', '2026', '2027', '2028', '2029', '2030', '2031', '2032', '2033', '2034', '2035', '2036', '2037', '2038', '2039', '2040'];
 
 // Daftar Fasilitas Standar HLP dari Logbook
 const defaultFasilitas = [
@@ -128,7 +128,7 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
     };
 
     try {
-      const url = initialData?._id ? `http://localhost:5000/api/reports/${initialData._id}` : 'http://localhost:5000/api/reports';
+      const url = initialData?._id ? `/api/reports/${initialData._id}` : '/api/reports';
       const response = await fetch(url, { 
         method: initialData?._id ? 'PUT' : 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
