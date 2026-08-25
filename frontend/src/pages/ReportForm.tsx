@@ -14,7 +14,12 @@ const years = ['2025', '2026', '2027', '2028', '2029', '2030', '2031', '2032', '
 const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
+const apindoList = ['AEP MASHUM NURZAMAN', 'RAHMAT D. CAHYO', 'EKA YULIANI S.', 'RIZKO E. NUGRAHA', 'ISTIANAH RAHMAH DEWI', 'MAULANA HADY C. S.'];
+const iassList = ['ADELIA PUSPITA', 'ABDUL KODIR', 'ROIM', 'DENNIS SAYYIDINAA R', 'YUDHA ISMUNANDAR', 'AHMAD FANGKY S.', 'KARUNIAWAN GEOVANI', 'MAHDI ALHABSYI'];
+const ntiList = ['LUTHFIANDA MUZAKI S', 'FARIZ SOLAHUDIN', 'ZAKY ALHADY', 'MUHAMMAD FACHREZA', 'YOAN HERNANTRA'];
+
 export default function ReportForm({ shift, initialData, onBack }: ReportFormProps) {
+  const [currentShift, setCurrentShift] = useState<'PAGI' | 'MALAM'>(initialData?.dinas || shift);
   const [activeTab, setActiveTab] = useState('umum');
   const [hari, setHari] = useState('30'); 
   const [bulan, setBulan] = useState('Juli'); 
@@ -39,11 +44,19 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [cropAspect, setCropAspect] = useState<number>(3 / 4);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
+  // Custom Alert State
+  const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', type: 'warning' as 'success' | 'error' | 'warning' });
+
   const isLocked = status === 'Menunggu SPV' || status === 'Menunggu Asmen' || status === 'Approved';
+
+  const showAlert = (message: string, type: 'success' | 'error' | 'warning' = 'warning') => {
+    setAlertConfig({ isOpen: true, message, type });
+  };
 
   useEffect(() => {
     if (initialData) {
       setStatus(initialData.status || 'Draft');
+      if (initialData.dinas) setCurrentShift(initialData.dinas);
       const parts = initialData.tanggal.split(' ');
       if (parts.length === 3) { setHari(parts[0]); setBulan(parts[1]); setTahun(parts[2]); }
       if (initialData.personil) {
@@ -73,10 +86,35 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     }
   }, [initialData]);
 
+  useEffect(() => {
+    const fetchAttendance = async () => {
+      if (initialData) return; 
+      const token = localStorage.getItem('token');
+      const tanggalStr = `${hari} ${bulan} ${tahun}`;
+      try {
+        const res = await fetch(`/api/attendance?tanggal=${encodeURIComponent(tanggalStr)}&dinas=${currentShift}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const result = await res.json();
+          if (result) {
+            if (result.apindo?.length) setApindo(result.apindo);
+            if (result.osIass?.length) setOsIass(result.osIass);
+            if (result.omNti?.length) setOmNti(result.omNti);
+          }
+        }
+      } catch (err) { console.error(err); }
+    };
+    fetchAttendance();
+  }, [hari, bulan, tahun, currentShift, initialData]);
+
   const handleTabChange = (tab: string) => {
     if (tab === 'kegiatan') {
       const isPersonilDiisi = apindo.some(p => p.nama.trim() !== '') || osIass.some(p => p.nama.trim() !== '') || omNti.some(p => p.nama.trim() !== '');
-      if (!isPersonilDiisi) { alert('❌ Harap isi minimal 1 nama personil terlebih dahulu!'); return; }
+      if (!isPersonilDiisi) { 
+        showAlert('Harap isi minimal 1 nama personil terlebih dahulu!', 'warning'); 
+        return; 
+      }
     }
     setActiveTab(tab);
   };
@@ -93,10 +131,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const handleUploadToSlot = (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      const newQueue = files.map(file => ({
-        url: URL.createObjectURL(file),
-        slotIndex
-      }));
+      const newQueue = files.map(file => ({ url: URL.createObjectURL(file), slotIndex }));
       setCropQueue(prev => [...prev, ...newQueue]);
     }
     e.target.value = '';
@@ -137,7 +172,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
       setCropQueue(prev => prev.slice(1));
       setCrop({ x: 0, y: 0 });
       setZoom(1);
-    } catch (e) { alert("Terjadi kesalahan saat memotong foto."); }
+    } catch (e) { showAlert("Terjadi kesalahan saat memotong foto.", 'error'); }
   };
 
   const removeImageFromSlot = (slotIndex: number, imgIndex: number) => {
@@ -186,9 +221,17 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
 
   const handleInitiateSubmit = () => {
     const isPersonilDiisi = apindo.some(p => p.nama.trim() !== '') || osIass.some(p => p.nama.trim() !== '') || omNti.some(p => p.nama.trim() !== '');
-    if (!isPersonilDiisi) { alert('❌ TIDAK BISA DISIMPAN: Harap isi minimal 1 nama personil!'); setActiveTab('umum'); return; }
+    if (!isPersonilDiisi) { 
+      showAlert('TIDAK BISA DISIMPAN: Harap isi minimal 1 nama personil!', 'error'); 
+      setActiveTab('umum'); 
+      return; 
+    }
     const validKegiatans = kegiatan.filter(k => (k.uraian || '').replace(/[-\s\n]/g, '').length > 0);
-    if (validKegiatans.length === 0) { alert('❌ TIDAK BISA DISIMPAN: Anda belum mengisi progress aduan!'); setActiveTab('kegiatan'); return; }
+    if (validKegiatans.length === 0) { 
+      showAlert('TIDAK BISA DISIMPAN: Anda belum mengisi progress aduan!', 'error'); 
+      setActiveTab('kegiatan'); 
+      return; 
+    }
     setShowModal(true); setModalStep('collage');
   };
 
@@ -197,7 +240,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     try {
       const generated = await Promise.all(slotImages.map(imgs => generateCollage(imgs)));
       setFinalCollages(generated); setModalStep('preview');
-    } catch (err) { alert('Gagal menyusun kolase foto.'); } 
+    } catch (err) { showAlert('Gagal menyusun kolase foto.', 'error'); } 
     finally { setIsGenerating(false); }
   };
 
@@ -212,28 +255,74 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     let newStatus = status;
     if (status === 'Draft' || status === 'Revisi') newStatus = 'Menunggu SPV';
     const dataLaporan = {
-      fungsi: 'ELECTRONIC & IT FACILITY', dinas: shift, tanggal: `${hari} ${bulan} ${tahun}`,
+      fungsi: 'ELECTRONIC & IT FACILITY', dinas: currentShift, tanggal: `${hari} ${bulan} ${tahun}`,
       status: newStatus,
       personil: { apindo: apindo.filter(p => p.nama), omIassNti: [...osIass.filter(p => p.nama), ...omNti.filter(p => p.nama)] },
       kegiatan: dataKegiatan, kondisiFasilitas: []
     };
     setIsSubmitting(true);
+    const token = localStorage.getItem('token');
     try {
       const url = initialData?._id ? `/api/reports/${initialData._id}` : '/api/reports';
       const response = await fetch(url, { 
         method: initialData?._id ? 'PUT' : 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, 
         body: JSON.stringify(dataLaporan) 
       });
-      if (response.ok) { alert('✅ Laporan berhasil diserahkan ke SPV!'); onBack(); } 
-      else { const errData = await response.json(); alert(`❌ GAGAL MENYIMPAN!\nAlasan Server: ${errData.message}`); }
-    } catch (e) { alert('❌ KONEKSI TERPUTUS! Cek koneksi internet Anda.'); }
+      if (response.ok) { 
+        setShowModal(false);
+        showAlert('Laporan berhasil diserahkan ke SPV!', 'success'); 
+        setTimeout(() => {
+          onBack();
+        }, 1500);
+      } 
+      else { 
+        const errData = await response.json(); 
+        showAlert(`GAGAL MENYIMPAN!\nAlasan Server: ${errData.message}`, 'error'); 
+      }
+    } catch (e) { showAlert('KONEKSI TERPUTUS! Cek koneksi internet Anda.', 'error'); }
     setIsSubmitting(false);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-2 sm:p-6 md:p-10 font-sans flex justify-center text-slate-800 w-full overflow-x-hidden relative">
       
+      {/* Custom Alert Modal */}
+      {alertConfig.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl relative flex flex-col overflow-hidden text-center border border-slate-100">
+            <div className="p-6 pb-2 pt-8 flex justify-center">
+              {alertConfig.type === 'error' && (
+                <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </div>
+              )}
+              {alertConfig.type === 'warning' && (
+                <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-500 flex items-center justify-center">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+              )}
+              {alertConfig.type === 'success' && (
+                <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                </div>
+              )}
+            </div>
+            <div className="p-6 pt-4 space-y-6">
+              <p className="text-sm font-bold text-slate-700 whitespace-pre-line leading-relaxed">{alertConfig.message}</p>
+              {alertConfig.type !== 'success' && (
+                <button 
+                  onClick={() => setAlertConfig({ ...alertConfig, isOpen: false })} 
+                  className="w-full py-3.5 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 transition-all shadow-sm"
+                >
+                  Mengerti
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <CropperModal cropQueue={cropQueue} setCropQueue={setCropQueue} crop={crop} setCrop={setCrop} zoom={zoom} setZoom={setZoom} cropAspect={cropAspect} setCropAspect={setCropAspect} setCroppedAreaPixels={setCroppedAreaPixels} handleSaveCrop={handleSaveCrop} />
 
       <div className="w-full max-w-5xl bg-white/50 backdrop-blur-xl rounded-xl sm:rounded-[2rem] border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] flex flex-col h-full sm:h-auto overflow-hidden z-10">
@@ -248,8 +337,24 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">Layanan Pengaduan Fasilitas Umum</p>
               </div>
             </div>
-            <div className={`self-start sm:self-auto px-5 py-2 rounded-xl text-xs font-bold tracking-widest uppercase shadow-sm border border-white ${shift === 'PAGI' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
-              Shift {shift}
+            
+            <div className="self-start sm:self-auto flex bg-white shadow-sm border border-slate-100 p-1 rounded-2xl w-fit">
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => setCurrentShift('PAGI')}
+                className={`px-6 py-2 rounded-xl text-xs font-extrabold tracking-widest transition-all disabled:opacity-60 ${currentShift === 'PAGI' ? 'bg-[#facc15] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                PAGI
+              </button>
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => setCurrentShift('MALAM')}
+                className={`px-6 py-2 rounded-xl text-xs font-extrabold tracking-widest transition-all disabled:opacity-60 ${currentShift === 'MALAM' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                MALAM
+              </button>
             </div>
           </div>
 
@@ -274,9 +379,36 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
                 <div className="space-y-4 w-full">
                   <h2 className="text-xs sm:text-sm font-extrabold text-slate-500 uppercase tracking-widest flex items-center"><div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>Tim Bertugas</h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                    <div className="space-y-3 w-full"><label className="text-xs font-bold text-slate-600 block ml-1">APINDO</label>{apindo.map((p, i) => <input disabled={isLocked} key={i} type="text" value={p.nama} onChange={(e) => { const n = [...apindo]; n[i].nama = e.target.value; setApindo(n); }} placeholder="Nama lengkap..." className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60" />)}{!isLocked && <button onClick={() => setApindo([...apindo, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}</div>
-                    <div className="space-y-3 w-full"><label className="text-xs font-bold text-slate-600 block ml-1">OS - IASS</label>{osIass.map((p, i) => <input disabled={isLocked} key={i} type="text" value={p.nama} onChange={(e) => { const n = [...osIass]; n[i].nama = e.target.value; setOsIass(n); }} placeholder="Nama lengkap..." className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60" />)}{!isLocked && <button onClick={() => setOsIass([...osIass, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}</div>
-                    <div className="space-y-3 w-full"><label className="text-xs font-bold text-slate-600 block ml-1">OM - NTI</label>{omNti.map((p, i) => <input disabled={isLocked} key={i} type="text" value={p.nama} onChange={(e) => { const n = [...omNti]; n[i].nama = e.target.value; setOmNti(n); }} placeholder="Nama lengkap..." className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60" />)}{!isLocked && <button onClick={() => setOmNti([...omNti, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}</div>
+                    <div className="space-y-3 w-full">
+                      <label className="text-xs font-bold text-slate-600 block ml-1">APINDO</label>
+                      {apindo.map((p, i) => (
+                        <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...apindo]; n[i].nama = e.target.value; setApindo(n); }} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60">
+                          <option value="">- Pilih Personil -</option>
+                          {apindoList.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                      ))}
+                      {!isLocked && <button onClick={() => setApindo([...apindo, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}
+                    </div>
+                    <div className="space-y-3 w-full">
+                      <label className="text-xs font-bold text-slate-600 block ml-1">OS - IASS</label>
+                      {osIass.map((p, i) => (
+                        <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...osIass]; n[i].nama = e.target.value; setOsIass(n); }} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60">
+                          <option value="">- Pilih Personil -</option>
+                          {iassList.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                      ))}
+                      {!isLocked && <button onClick={() => setOsIass([...osIass, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}
+                    </div>
+                    <div className="space-y-3 w-full">
+                      <label className="text-xs font-bold text-slate-600 block ml-1">OM - NTI</label>
+                      {omNti.map((p, i) => (
+                        <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...omNti]; n[i].nama = e.target.value; setOmNti(n); }} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60">
+                          <option value="">- Pilih Personil -</option>
+                          {ntiList.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                      ))}
+                      {!isLocked && <button onClick={() => setOmNti([...omNti, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -321,7 +453,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
         </div>
       </div>
 
-      <CollageModal showModal={showModal} setShowModal={setShowModal} modalStep={modalStep} setModalStep={setModalStep} slotImages={slotImages} handleUploadToSlot={handleUploadToSlot} removeImageFromSlot={removeImageFromSlot} handleInitiatePreview={handleInitiatePreview} isGenerating={isGenerating} hari={hari} bulan={bulan} tahun={tahun} shift={shift} kegiatan={kegiatan} finalCollages={finalCollages} handleFinalSubmit={handleFinalSubmit} isSubmitting={isSubmitting} />
+      <CollageModal showModal={showModal} setShowModal={setShowModal} modalStep={modalStep} setModalStep={setModalStep} slotImages={slotImages} handleUploadToSlot={handleUploadToSlot} removeImageFromSlot={removeImageFromSlot} handleInitiatePreview={handleInitiatePreview} isGenerating={isGenerating} hari={hari} bulan={bulan} tahun={tahun} shift={currentShift} kegiatan={kegiatan} finalCollages={finalCollages} handleFinalSubmit={handleFinalSubmit} isSubmitting={isSubmitting} />
     </div>
   );
 }

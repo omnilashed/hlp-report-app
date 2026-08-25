@@ -6,7 +6,6 @@ const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2,
 const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const years = ['2025', '2026', '2027', '2028', '2029', '2030', '2031', '2032', '2033', '2034', '2035', '2036', '2037', '2038', '2039', '2040'];
 
-// Daftar Fasilitas Standar HLP dari Logbook
 const defaultFasilitas = [
   { namaFasilitas: 'X-RAY', totalUnit: 10, normal: 10, rusak: 0, keteranganRusak: '' },
   { namaFasilitas: 'WTMD', totalUnit: 7, normal: 7, rusak: 0, keteranganRusak: '' },
@@ -54,8 +53,30 @@ const defaultFasilitas = [
   { namaFasilitas: 'CRASHBELL', totalUnit: 1, normal: 1, rusak: 0, keteranganRusak: '' },
 ];
 
+const getCategory = (namaFasilitas: string) => {
+  const n = namaFasilitas.toUpperCase();
+  if (n.includes('X-RAY') || n.includes('WTMD') || n.includes('HHMD') || n.includes('ETD') || n.includes('CRASHBELL') || n.includes('ACCESS CONTROL')) return 'SECURITY & ACCESS';
+  if (n.includes('SWITCH') || n.includes('RADIOLINK') || n.includes('ACCESS POINT')) return 'NETWORK';
+  if (n.includes('PABX') || n.includes('IGCS')) return 'TELECOM';
+  if (n.includes('CCTV')) return 'CCTV SYSTEM';
+  if (n.includes('PAS')) return 'AUDIO (PAS)';
+  if (n.includes('FAS')) return 'FIRE ALARM (FAS)';
+  if (n.includes('BAS')) return 'BAS';
+  if (n.includes('FIDS') || n.includes('VIDEO WALL') || n.includes('RUNNING TEXT') || n.includes('DIGITAL BANNER') || n.includes('MONITOR CHECK-IN') || n.includes('SIGN')) return 'FIDS & DISPLAY';
+  if (n.includes('VHF')) return 'RADIO VHF';
+  return 'LAINNYA'; 
+};
+
+const categories = [
+  'SECURITY & ACCESS', 'NETWORK', 'TELECOM', 'CCTV SYSTEM', 
+  'AUDIO (PAS)', 'FIRE ALARM (FAS)', 'BAS', 'FIDS & DISPLAY', 
+  'RADIO VHF', 'LAINNYA'
+];
+
 export default function FasilitasForm({ initialData, onBack }: FasilitasFormProps) {
   const [activeTab, setActiveTab] = useState('umum');
+  const [activeCategory, setActiveCategory] = useState('SECURITY & ACCESS');
+  
   const [shift, setShift] = useState<'PAGI' | 'MALAM'>('PAGI');
   const [hari, setHari] = useState('30'); 
   const [bulan, setBulan] = useState('Juli'); 
@@ -65,10 +86,45 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
   const [osIass, setOsIass] = useState([{ nama: '' }]); 
   const [omNti, setOmNti] = useState([{ nama: '' }]);
 
+  const [personnelList, setPersonnelList] = useState<any[]>([]);
+
   const [fasilitas, setFasilitas] = useState(defaultFasilitas);
-  
-  // === STATE BARU UNTUK CATATAN ===
   const [catatan, setCatatan] = useState('');
+
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    dangerMode: false,
+    isNotificationOnly: false,
+    onConfirm: () => {}
+  });
+
+  const showNotification = (title: string, message: string, dangerMode = false) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      dangerMode,
+      isNotificationOnly: true,
+      onConfirm: () => setConfirmDialog(prev => ({ ...prev, isOpen: false }))
+    });
+  };
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const token = localStorage.getItem('token');
+      try {
+        const res = await fetch('/api/users', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          const userArray = Array.isArray(data) ? data : (data.data || []);
+          setPersonnelList(userArray.filter((u: any) => u.isActive && u.role !== 'GUEST'));
+        }
+      } catch (e) {}
+    };
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     if (initialData) {
@@ -87,7 +143,6 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
         setFasilitas(initialData.kondisiFasilitas);
       }
 
-      // Load catatan jika sedang edit
       if (initialData.catatan) {
         setCatatan(initialData.catatan);
       }
@@ -97,7 +152,10 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
   const handleTabChange = (tab: string) => {
     if (tab === 'fasilitas') {
       const isPersonilDiisi = apindo.some(p => p.nama.trim() !== '') || osIass.some(p => p.nama.trim() !== '') || omNti.some(p => p.nama.trim() !== '');
-      if (!isPersonilDiisi) { alert('❌ Harap isi minimal 1 nama personil terlebih dahulu sebelum mengecek fasilitas!'); return; }
+      if (!isPersonilDiisi) { 
+        showNotification('Perhatian', 'Harap isi minimal 1 nama personil terlebih dahulu sebelum mengecek fasilitas!', true); 
+        return; 
+      }
     }
     setActiveTab(tab);
   };
@@ -110,7 +168,11 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
 
   const handleFinalSubmit = async () => {
     const isPersonilDiisi = apindo.some(p => p.nama.trim() !== '') || osIass.some(p => p.nama.trim() !== '') || omNti.some(p => p.nama.trim() !== '');
-    if (!isPersonilDiisi) { alert('❌ TIDAK BISA DISIMPAN: Harap isi minimal 1 nama personil!'); setActiveTab('umum'); return; }
+    if (!isPersonilDiisi) { 
+      showNotification('Tindakan Ditolak', 'Harap isi minimal 1 nama personil!', true); 
+      setActiveTab('umum'); 
+      return; 
+    }
 
     const dataLaporan = {
       fungsi: 'ELECTRONIC & IT FACILITY', 
@@ -118,7 +180,7 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
       tanggal: `${hari} ${bulan} ${tahun}`,
       status: initialData?.status || 'Draft',
       catatanAsmen: initialData?.catatanAsmen || '',
-      catatan: catatan, // Mengirim catatan ke backend
+      catatan: catatan,
       personil: { 
         apindo: apindo.filter(p => p.nama), 
         omIassNti: [...osIass.filter(p => p.nama), ...omNti.filter(p => p.nama)] 
@@ -136,14 +198,14 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
       });
       
       if (response.ok) { 
-        alert('✅ Data Pengecekan Fasilitas berhasil disimpan!'); 
-        onBack(); 
+        showNotification('Berhasil', 'Data Pengecekan Fasilitas berhasil disimpan!'); 
+        setTimeout(() => { onBack(); }, 1200);
       } else { 
         const errData = await response.json();
-        alert(`❌ GAGAL MENYIMPAN!\nAlasan Server: ${errData.message || 'Error Database'}`); 
+        showNotification('Gagal Menyimpan', errData.message || 'Error Database', true); 
       }
     } catch (e) { 
-      alert('❌ KONEKSI TERPUTUS!\nTidak bisa terhubung ke server backend.'); 
+      showNotification('Koneksi Terputus', 'Tidak bisa terhubung ke server backend.', true); 
     }
   };
 
@@ -191,9 +253,55 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
                 <div className="space-y-4 w-full">
                   <h2 className="text-xs sm:text-sm font-extrabold text-slate-500 uppercase tracking-widest flex items-center"><div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>Tim Bertugas</h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                    <div className="space-y-3 w-full"><label className="text-xs font-bold text-slate-600 block ml-1">APINDO</label>{apindo.map((p, i) => <input key={i} type="text" value={p.nama} onChange={(e) => { const n = [...apindo]; n[i].nama = e.target.value; setApindo(n); }} placeholder="Nama lengkap..." className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner" />)}<button onClick={() => setApindo([...apindo, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button></div>
-                    <div className="space-y-3 w-full"><label className="text-xs font-bold text-slate-600 block ml-1">OS - IASS</label>{osIass.map((p, i) => <input key={i} type="text" value={p.nama} onChange={(e) => { const n = [...osIass]; n[i].nama = e.target.value; setOsIass(n); }} placeholder="Nama lengkap..." className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner" />)}<button onClick={() => setOsIass([...osIass, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button></div>
-                    <div className="space-y-3 w-full"><label className="text-xs font-bold text-slate-600 block ml-1">OM - NTI</label>{omNti.map((p, i) => <input key={i} type="text" value={p.nama} onChange={(e) => { const n = [...omNti]; n[i].nama = e.target.value; setOmNti(n); }} placeholder="Nama lengkap..." className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner" />)}<button onClick={() => setOmNti([...omNti, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button></div>
+                    
+                    <div className="space-y-3 w-full">
+                      <label className="text-xs font-bold text-slate-600 block ml-1">APINDO</label>
+                      {apindo.map((p, i) => (
+                        <select 
+                          key={i} 
+                          value={p.nama} 
+                          onChange={(e) => { const n = [...apindo]; n[i].nama = e.target.value; setApindo(n); }} 
+                          className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/20 shadow-inner cursor-pointer"
+                        >
+                          <option value="">- Pilih Personil -</option>
+                          {personnelList.filter(u => u.perusahaan === 'APINDO').map(u => <option key={u._id} value={u.namaLengkap || u.username}>{u.namaLengkap || u.username}</option>)}
+                        </select>
+                      ))}
+                      <button onClick={() => setApindo([...apindo, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>
+                    </div>
+
+                    <div className="space-y-3 w-full">
+                      <label className="text-xs font-bold text-slate-600 block ml-1">OS - IASS</label>
+                      {osIass.map((p, i) => (
+                        <select 
+                          key={i} 
+                          value={p.nama} 
+                          onChange={(e) => { const n = [...osIass]; n[i].nama = e.target.value; setOsIass(n); }} 
+                          className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/20 shadow-inner cursor-pointer"
+                        >
+                          <option value="">- Pilih Personil -</option>
+                          {personnelList.filter(u => u.perusahaan === 'IASS').map(u => <option key={u._id} value={u.namaLengkap || u.username}>{u.namaLengkap || u.username}</option>)}
+                        </select>
+                      ))}
+                      <button onClick={() => setOsIass([...osIass, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>
+                    </div>
+
+                    <div className="space-y-3 w-full">
+                      <label className="text-xs font-bold text-slate-600 block ml-1">OM - NTI</label>
+                      {omNti.map((p, i) => (
+                        <select 
+                          key={i} 
+                          value={p.nama} 
+                          onChange={(e) => { const n = [...omNti]; n[i].nama = e.target.value; setOmNti(n); }} 
+                          className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/20 shadow-inner cursor-pointer"
+                        >
+                          <option value="">- Pilih Personil -</option>
+                          {personnelList.filter(u => u.perusahaan === 'NTI').map(u => <option key={u._id} value={u.namaLengkap || u.username}>{u.namaLengkap || u.username}</option>)}
+                        </select>
+                      ))}
+                      <button onClick={() => setOmNti([...omNti, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>
+                    </div>
+
                   </div>
                 </div>
 
@@ -205,42 +313,79 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
 
             {activeTab === 'fasilitas' && (
               <div className="space-y-6 animate-fadeIn w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {fasilitas.map((item, index) => (
-                    <div key={index} className="p-5 rounded-2xl bg-white/50 backdrop-blur-sm border border-white/60 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex justify-between items-center mb-4 border-b border-white/60 pb-3">
-                        <span className="font-extrabold text-slate-800 text-sm tracking-wide">{item.namaFasilitas}</span>
-                        <button onClick={() => { if(window.confirm('Hapus fasilitas ini?')) { const n = [...fasilitas]; n.splice(index, 1); setFasilitas(n); } }} className="text-rose-400 hover:text-rose-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-3 mb-4">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Total</label>
-                          <input type="number" value={item.totalUnit} onChange={(e) => handleFasilitasChange(index, 'totalUnit', parseInt(e.target.value) || 0)} className="w-full p-2 bg-white/60 border border-white/60 rounded-lg outline-none font-bold text-slate-700 text-center text-xs focus:ring-2 focus:ring-blue-500/20" />
+                
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {categories.map((cat) => {
+                    const countRusak = fasilitas.filter(f => getCategory(f.namaFasilitas) === cat && f.rusak > 0).length;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setActiveCategory(cat)}
+                        className={`px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-extrabold whitespace-nowrap transition-all shadow-sm flex items-center gap-2 border ${activeCategory === cat ? 'bg-[#175390] text-white border-[#175390] shadow-md' : 'bg-white/80 text-slate-500 hover:bg-white border-white'}`}
+                      >
+                        {cat}
+                        {countRusak > 0 && (
+                          <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-rose-500 text-white text-[9px] sm:text-[10px] flex items-center justify-center font-bold">
+                            {countRusak}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mt-4">
+                  {fasilitas
+                    .map((item, originalIndex) => ({ item, originalIndex }))
+                    .filter(({ item }) => getCategory(item.namaFasilitas) === activeCategory)
+                    .map(({ item, originalIndex }) => (
+                      <div key={originalIndex} className="p-5 rounded-2xl bg-white/50 backdrop-blur-sm border border-white/60 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-center mb-4 border-b border-white/60 pb-3">
+                          <span className="font-extrabold text-slate-800 text-sm tracking-wide">{item.namaFasilitas}</span>
+                          <button onClick={() => {
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: 'Hapus Fasilitas',
+                              message: `Yakin ingin menghapus ${item.namaFasilitas} dari daftar ini?`,
+                              dangerMode: true,
+                              isNotificationOnly: false,
+                              onConfirm: () => {
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                const n = [...fasilitas];
+                                n.splice(originalIndex, 1);
+                                setFasilitas(n);
+                              }
+                            });
+                          }} className="text-rose-400 hover:text-rose-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-emerald-600 uppercase block mb-1">Normal</label>
-                          <input type="number" value={item.normal} onChange={(e) => handleFasilitasChange(index, 'normal', parseInt(e.target.value) || 0)} className="w-full p-2 bg-emerald-50 border border-emerald-200 rounded-lg outline-none font-bold text-emerald-700 text-center text-xs focus:ring-2 focus:ring-emerald-500/20" />
+                        
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Total</label>
+                            <input type="number" value={item.totalUnit} onChange={(e) => handleFasilitasChange(originalIndex, 'totalUnit', parseInt(e.target.value) || 0)} className="w-full p-2 bg-white/60 border border-white/60 rounded-lg outline-none font-bold text-slate-700 text-center text-xs focus:ring-2 focus:ring-blue-500/20" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-emerald-600 uppercase block mb-1">Normal</label>
+                            <input type="number" value={item.normal} onChange={(e) => handleFasilitasChange(originalIndex, 'normal', parseInt(e.target.value) || 0)} className="w-full p-2 bg-emerald-50 border border-emerald-200 rounded-lg outline-none font-bold text-emerald-700 text-center text-xs focus:ring-2 focus:ring-emerald-500/20" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-rose-600 uppercase block mb-1">Rusak</label>
+                            <input type="number" value={item.rusak} onChange={(e) => handleFasilitasChange(originalIndex, 'rusak', parseInt(e.target.value) || 0)} className="w-full p-2 bg-rose-50 border border-rose-200 rounded-lg outline-none font-bold text-rose-700 text-center text-xs focus:ring-2 focus:ring-rose-500/20" />
+                          </div>
                         </div>
+                        
                         <div>
-                          <label className="text-[10px] font-bold text-rose-600 uppercase block mb-1">Rusak</label>
-                          <input type="number" value={item.rusak} onChange={(e) => handleFasilitasChange(index, 'rusak', parseInt(e.target.value) || 0)} className="w-full p-2 bg-rose-50 border border-rose-200 rounded-lg outline-none font-bold text-rose-700 text-center text-xs focus:ring-2 focus:ring-rose-500/20" />
+                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Keterangan Rusak</label>
+                          <input type="text" value={item.keteranganRusak} onChange={(e) => handleFasilitasChange(originalIndex, 'keteranganRusak', e.target.value)} placeholder="Aman / Detail kerusakan..." className={`w-full p-2.5 bg-white/60 border border-white/60 rounded-lg outline-none font-medium text-xs focus:ring-2 focus:ring-blue-500/20 ${item.rusak > 0 ? 'text-rose-600 placeholder-rose-300 bg-rose-50/50' : 'text-slate-700'}`} />
                         </div>
                       </div>
-                      
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Keterangan Rusak</label>
-                        <input type="text" value={item.keteranganRusak} onChange={(e) => handleFasilitasChange(index, 'keteranganRusak', e.target.value)} placeholder="Aman / Detail kerusakan..." className={`w-full p-2.5 bg-white/60 border border-white/60 rounded-lg outline-none font-medium text-xs focus:ring-2 focus:ring-blue-500/20 ${item.rusak > 0 ? 'text-rose-600 placeholder-rose-300 bg-rose-50/50' : 'text-slate-700'}`} />
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                   
                   <button onClick={() => setFasilitas([...fasilitas, { namaFasilitas: 'FASILITAS BARU', totalUnit: 1, normal: 1, rusak: 0, keteranganRusak: '' }])} className="p-5 rounded-2xl bg-white/30 border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-500 font-bold text-xs flex flex-col items-center justify-center transition-all h-full min-h-[200px]">
-                    <span className="text-2xl mb-2">+</span> Tambah Fasilitas
+                    <span className="text-2xl mb-2">+</span> Tambah (Di {activeCategory})
                   </button>
                 </div>
 
-                {/* === KOLOM CATATAN TAMBAHAN (BARU) === */}
                 <div className="mt-8 bg-white/50 backdrop-blur-sm border border-white/60 p-5 rounded-2xl shadow-sm">
                   <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-3 block flex items-center">
                     <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
@@ -264,6 +409,40 @@ export default function FasilitasForm({ initialData, onBack }: FasilitasFormProp
           </div>
         </div>
       </div>
+
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col text-center">
+            <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-5 shadow-inner ${confirmDialog.dangerMode ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-[#2563eb]'}`}>
+              {confirmDialog.isNotificationOnly && !confirmDialog.dangerMode ? (
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              ) : (
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              )}
+            </div>
+            <h3 className="text-xl font-extrabold text-slate-800 mb-2">{confirmDialog.title}</h3>
+            <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
+              {confirmDialog.message}
+            </p>
+            <div className="flex gap-3 w-full">
+              {!confirmDialog.isNotificationOnly && (
+                <button 
+                  onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+              )}
+              <button 
+                onClick={confirmDialog.onConfirm}
+                className={`flex-1 py-3 text-white text-sm font-bold rounded-xl shadow-md transition-colors ${confirmDialog.dangerMode ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/30' : 'bg-[#2563eb] hover:bg-[#1d4ed8] shadow-blue-500/30'}`}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

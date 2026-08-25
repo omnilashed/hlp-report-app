@@ -1,0 +1,13 @@
+# Dependency
+node_modules/
+
+# Environment Variables
+.env
+
+# WhatsApp Bot Session
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Build & Logs
+dist/
+npm-debug.log*

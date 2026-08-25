@@ -1,3 +1,5 @@
+import React from 'react';
+
 interface TableRiwayatProps {
   reports: any[];
   isLoading: boolean;
@@ -5,9 +7,12 @@ interface TableRiwayatProps {
   viewReportDetail: (report: any) => void;
   editReport: (report: any) => void;
   deleteReport: (id: string) => void;
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }
 
-export default function TableRiwayat({ reports, isLoading, canInput, viewReportDetail, editReport, deleteReport }: TableRiwayatProps) {
+export default function TableRiwayat({ reports, isLoading, canInput, viewReportDetail, editReport, deleteReport, currentPage, totalPages, onPageChange }: TableRiwayatProps) {
   return (
     <div className="bg-white/50 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] w-full overflow-hidden">
       <div className="p-6 border-b border-white/50 bg-white/30 flex justify-between items-center">
@@ -44,7 +49,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                 const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-200 text-slate-700 border-slate-300';
                 return (
                   <tr key={report._id || index} className="border-b border-white/30 hover:bg-white/40 transition-colors">
-                    <td className="p-4 text-center font-medium text-slate-500">{index + 1}</td>
+                    <td className="p-4 text-center font-medium text-slate-500">{(currentPage - 1) * 10 + index + 1}</td>
                     <td className="p-4 font-bold text-slate-800">{isFasilitasOnly ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</td>
                     <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-xs font-bold border ${statusClass}`}>{status}</span></td>
                     <td className="p-4 font-medium text-slate-600">{report.tanggal} <span className="ml-2 bg-blue-100/50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200/50">Shift {report.dinas}</span></td>
@@ -84,7 +89,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
               <div key={report._id || index} className="bg-white/60 backdrop-blur-md border border-white/60 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-500 bg-white/50 px-2.5 py-1 rounded-lg border border-white">#{index + 1} • {report.tanggal}</span>
+                    <span className="text-[10px] font-bold text-slate-500 bg-white/50 px-2.5 py-1 rounded-lg border border-white">#{(currentPage - 1) * 10 + index + 1} • {report.tanggal}</span>
                     <h3 className="font-bold text-slate-800 mt-3 text-base">{isFasilitasOnly ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</h3>
                     <p className="text-sm text-blue-600 font-bold mt-1">Shift {report.dinas}</p>
                   </div>
@@ -106,6 +111,26 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
           <div className="text-center text-slate-400 py-10 font-medium">Belum ada laporan masuk.</div>
         )}
       </div>
+
+      {!isLoading && totalPages > 1 && (
+        <div className="bg-white/30 p-4 border-t border-slate-200/60 flex justify-between items-center">
+          <button 
+            onClick={() => onPageChange(currentPage - 1)} 
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-white text-slate-600 font-bold rounded-lg text-xs hover:bg-slate-50 disabled:opacity-50 border border-slate-200"
+          >
+            ← Sebelumnya
+          </button>
+          <span className="text-xs font-bold text-slate-500">Halaman {currentPage} dari {totalPages}</span>
+          <button 
+            onClick={() => onPageChange(currentPage + 1)} 
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 bg-white text-slate-600 font-bold rounded-lg text-xs hover:bg-slate-50 disabled:opacity-50 border border-slate-200"
+          >
+            Selanjutnya →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
