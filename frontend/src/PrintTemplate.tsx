@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import { forwardRef } from 'react';
 
 export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }, ref) => {
   if (!data) return null;

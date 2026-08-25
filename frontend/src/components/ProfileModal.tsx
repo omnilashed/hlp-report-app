@@ -6,7 +6,7 @@ interface ProfileModalProps {
   userRole: string;
 }
 
-export default function ProfileModal({ isOpen, onClose, userRole }: ProfileModalProps) {
+export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [activeTab, setActiveTab] = useState<'info' | 'password'>('info');
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
