@@ -11,6 +11,7 @@ import { verifyToken, requireRole, AuthRequest } from './middleware/auth';
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 
+
 dotenv.config();
 
 const app = express();
