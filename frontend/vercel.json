@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://then-flights-christmas-consequence.trycloudflare.com/api/$1"
+      "destination": "https://driven-recommends-zoo-hamburg.trycloudflare.com/api/$1"
     },
     {
       "source": "/(.*)",
