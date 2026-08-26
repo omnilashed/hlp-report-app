@@ -51,6 +51,7 @@ app.post('/api/reports', async (req: Request, res: Response) => {
 app.put('/api/reports/:id', async (req: Request, res: Response) => {
   try {
     await connectDB();
+    // @ts-ignore
     const updatedReport = await Report.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.status(200).json({ message: 'Report updated successfully', data: updatedReport });
   } catch (error) { 
@@ -71,6 +72,7 @@ app.get('/api/reports', async (req: Request, res: Response) => {
 app.delete('/api/reports/:id', async (req: Request, res: Response) => {
   try {
     await connectDB();
+    // @ts-ignore
     await Report.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: 'Report deleted successfully' });
   } catch (error) { 
