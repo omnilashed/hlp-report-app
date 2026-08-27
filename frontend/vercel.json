@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://roommate-crystal-teach-lemon.trycloudflare.com/$1"
+      "destination": "https://made-period-wife-staffing.trycloudflare.com/api/$1"
     },
     {
       "source": "/(.*)",
