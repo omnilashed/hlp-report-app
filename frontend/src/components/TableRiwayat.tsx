@@ -1,4 +1,4 @@
-
+import { useState } from 'react';
 
 interface TableRiwayatProps {
   reports: any[];
@@ -13,12 +13,43 @@ interface TableRiwayatProps {
 }
 
 export default function TableRiwayat({ reports, isLoading, canInput, viewReportDetail, editReport, deleteReport, currentPage, totalPages, onPageChange }: TableRiwayatProps) {
+  const [activeTab, setActiveTab] = useState<'Logbook' | 'Fasilitas'>('Logbook');
+
+  const filteredReports = reports.filter((report: any) => {
+    if (activeTab === 'Fasilitas') {
+      return report.kondisiFasilitas && report.kondisiFasilitas.length > 0;
+    } else {
+      return !report.kondisiFasilitas || report.kondisiFasilitas.length === 0;
+    }
+  });
+
   return (
     <div className="bg-white/50 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] w-full overflow-hidden">
       <div className="p-6 border-b border-white/50 bg-white/30 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <h2 className="font-bold text-slate-800 text-lg">Riwayat Laporan Masuk</h2>
-        </div>
+        <h2 className="font-bold text-slate-800 text-lg">Riwayat Laporan Masuk</h2>
+      </div>
+
+      <div className="flex gap-3 p-4 md:px-6 border-b border-white/50 bg-white/20 overflow-x-auto scrollbar-hide">
+        <button
+          onClick={() => setActiveTab('Logbook')}
+          className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+            activeTab === 'Logbook' 
+              ? 'bg-blue-600 text-white shadow-md' 
+              : 'bg-white/70 text-slate-500 hover:bg-white'
+          }`}
+        >
+          Logbook Harian
+        </button>
+        <button
+          onClick={() => setActiveTab('Fasilitas')}
+          className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+            activeTab === 'Fasilitas' 
+              ? 'bg-emerald-600 text-white shadow-md' 
+              : 'bg-white/70 text-slate-500 hover:bg-white'
+          }`}
+        >
+          Pengecekan Fasilitas
+        </button>
       </div>
       
       <div className="hidden md:block overflow-x-auto w-full p-2">
@@ -42,15 +73,14 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                   </div>
                 </td>
               </tr>
-            ) : reports.length > 0 ? (
-              reports.map((report, index) => {
-                const isFasilitasOnly = report.kondisiFasilitas?.length > 0 && (!report.kegiatan || report.kegiatan.length === 0);
+            ) : filteredReports.length > 0 ? (
+              filteredReports.map((report, index) => {
                 const status = report.status || 'Draft';
                 const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-200 text-slate-700 border-slate-300';
                 return (
                   <tr key={report._id || index} className="border-b border-white/30 hover:bg-white/40 transition-colors">
                     <td className="p-4 text-center font-medium text-slate-500">{(currentPage - 1) * 10 + index + 1}</td>
-                    <td className="p-4 font-bold text-slate-800">{isFasilitasOnly ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</td>
+                    <td className="p-4 font-bold text-slate-800">{activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</td>
                     <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-xs font-bold border ${statusClass}`}>{status}</span></td>
                     <td className="p-4 font-medium text-slate-600">{report.tanggal} <span className="ml-2 bg-blue-100/50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200/50">Shift {report.dinas}</span></td>
                     <td className="p-4 text-center">
@@ -68,7 +98,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                 );
               })
             ) : (
-              <tr><td colSpan={5} className="p-10 text-center text-slate-400 font-medium">Belum ada laporan masuk.</td></tr>
+              <tr><td colSpan={5} className="p-10 text-center text-slate-400 font-medium">Belum ada {activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Logbook'} di halaman ini.</td></tr>
             )}
           </tbody>
         </table>
@@ -80,9 +110,8 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
             <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
             <span className="text-blue-600 font-bold text-sm animate-pulse">Mengambil data laporan...</span>
           </div>
-        ) : reports.length > 0 ? (
-          reports.map((report, index) => {
-            const isFasilitasOnly = report.kondisiFasilitas?.length > 0 && (!report.kegiatan || report.kegiatan.length === 0);
+        ) : filteredReports.length > 0 ? (
+          filteredReports.map((report, index) => {
             const status = report.status || 'Draft';
             const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-200 text-slate-700 border-slate-300';
             return (
@@ -90,7 +119,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 bg-white/50 px-2.5 py-1 rounded-lg border border-white">#{(currentPage - 1) * 10 + index + 1} • {report.tanggal}</span>
-                    <h3 className="font-bold text-slate-800 mt-3 text-base">{isFasilitasOnly ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</h3>
+                    <h3 className="font-bold text-slate-800 mt-3 text-base">{activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</h3>
                     <p className="text-sm text-blue-600 font-bold mt-1">Shift {report.dinas}</p>
                   </div>
                   <span className={`px-2 py-1 rounded-md text-[10px] font-bold border ${statusClass}`}>{status}</span>
@@ -108,7 +137,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
             );
           })
         ) : (
-          <div className="text-center text-slate-400 py-10 font-medium">Belum ada laporan masuk.</div>
+          <div className="text-center text-slate-400 py-10 font-medium">Belum ada {activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Logbook'} di halaman ini.</div>
         )}
       </div>
 

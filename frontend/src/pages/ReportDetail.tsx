@@ -7,7 +7,7 @@ interface ReportDetailProps {
   canAsmenApprove: boolean;
   handleApprove: (report: any) => void;
   handleReject: (report: any) => void;
-  handleDelete?: (id: string) => void; // Tombol Hapus Khusus Admin
+  handleDelete?: (id: string) => void;
   setCurrentView: (view: string) => void;
   printLogbookRef?: any;
   printFasilitasRef?: any;
@@ -33,8 +33,10 @@ export default function ReportDetail({
   const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-700 border-slate-200';
 
   const downloadPDF = async () => {
+    if (isFasilitasOnly) return;
     setExportOpen(false);
     const element = document.getElementById('print-area');
+    
     if (!element) return alert('Template cetak tidak ditemukan!');
 
     const btn = document.getElementById('btn-download-pdf');
@@ -79,19 +81,78 @@ export default function ReportDetail({
   };
 
   const exportToWord = () => {
-    const content = document.getElementById('print-area')?.innerHTML;
-    if (!content) return;
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Export HTML To Doc</title></head><body>${content}</body></html>`;
+    let html = '';
+
+    if (isFasilitasOnly) {
+      const tgl = selectedReport.tanggal;
+      const dn = selectedReport.dinas;
+      const ap = selectedReport.personil?.apindo?.map((p: any) => `👷🏻 ${p.nama}`).join('<br>') || '👷🏻 -';
+      const is = selectedReport.personil?.omIassNti?.map((p: any) => `👷🏻 ${p.nama}`).join('<br>') || '👷🏻 -';
+
+      let docContent = `
+        <div style="font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.5;">
+          <p>Assalamu'alaikum. Wr. Wb<br>
+          Bersama ini dilaporkan, kegiatan ELECTRONIC & IT FACILITY – KSO HLP pada hari ini ${tgl} sebagai berikut :</p>
+          
+          <p><strong>ELECTRONIC & IT FACILITY – KSO HLP</strong><br>
+          <strong>A. PERSONIL DINAS ${dn} - ELIT</strong><br>
+          APINDO<br>
+          ${ap}<br><br>
+          OM IASS - NTI<br>
+          ${is}</p>
+
+          <p><strong>B. LAPORAN KONDISI FASILITAS – ELIT</strong></p>
+      `;
+
+      const grouped = selectedReport.kondisiFasilitas.reduce((acc: any, curr: any) => {
+        if (!acc[curr.namaPeralatan]) acc[curr.namaPeralatan] = { total: 0, normal: 0, rusak: 0, listRusak: [] };
+        acc[curr.namaPeralatan].total += 1;
+        if (curr.kondisi === 'Normal') acc[curr.namaPeralatan].normal += 1;
+        if (curr.kondisi === 'Rusak') {
+          acc[curr.namaPeralatan].rusak += 1;
+          if(curr.keteranganRusak) acc[curr.namaPeralatan].listRusak.push(`${curr.lokasi} (${curr.keteranganRusak})`);
+        }
+        return acc;
+      }, {});
+
+      Object.entries(grouped).forEach(([nama, data]: [string, any]) => {
+        docContent += `<p style="margin-bottom: 5px;"><strong>${nama.toUpperCase()} (${data.total} Unit)</strong><br>`;
+        docContent += `- ✅ Normal : ${data.normal} Unit<br>`;
+        if (data.rusak > 0) {
+            const ketStr = data.listRusak.length > 0 ? ` (${data.listRusak.join(', ')})` : '';
+            docContent += `- ❌ Rusak : ${data.rusak} Unit${ketStr}</p>`;
+        } else {
+            docContent += `- ❌ Rusak : -</p>`;
+        }
+      });
+
+      if (selectedReport.catatan) {
+          docContent += `<p><strong>Catatan :</strong><br>${selectedReport.catatan.replace(/\n/g, '<br>')}</p>`;
+      } else {
+          docContent += `<p>"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"</p>`;
+      }
+
+      docContent += `<p>Demikian disampaikan.<br>Haturnuhun</p></div>`;
+      html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Laporan Fasilitas</title></head><body>${docContent}</body></html>`;
+    
+    } else {
+      const content = document.getElementById('print-area')?.innerHTML;
+      if (!content) return;
+      html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Export HTML To Doc</title></head><body>${content}</body></html>`;
+    }
+
     const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `LogBook_${selectedReport.dinas}_${selectedReport.tanggal}.doc`;
+    link.download = `${isFasilitasOnly ? 'Fasilitas' : 'LogBook'}_${selectedReport.dinas}_${selectedReport.tanggal}.doc`;
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     setExportOpen(false);
   };
 
   const exportToExcel = async () => {
+    if (isFasilitasOnly) return; 
+    
     setExportOpen(false);
     const btn = document.getElementById('btn-download-excel');
     if(btn) btn.innerHTML = '⏳ Menyusun Excel...';
@@ -123,7 +184,6 @@ export default function ReportDetail({
 
       const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
 
-      // 1. KOP SURAT
       sheet.mergeCells('A1:B1'); sheet.mergeCells('D1:E1');
       sheet.mergeCells('A2:B2'); sheet.mergeCells('D2:E2');
       const fHeader = sheet.getCell('A1'); fHeader.value = 'FUNGSI';
@@ -144,14 +204,12 @@ export default function ReportDetail({
         cell.border = thinBorder; cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
 
-      // 2. JUDUL TENGAH
       sheet.mergeCells('A4:H4');
       const titleCell = sheet.getCell('A4');
       titleCell.value = 'LAPORAN KEGIATAN HARIAN (LOG BOOK)';
       titleCell.font = { bold: true, size: 16 };
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
-      // LOGO
       try {
         const response = await fetch('/hlp.png');
         const blob = await response.blob();
@@ -167,7 +225,6 @@ export default function ReportDetail({
         });
       } catch (e) {}
 
-      // 3. TABEL UTAMA - HEADER
       const headerRowIdx = 6;
       const mainHeaders = ['NO', 'LAPORAN DARI', 'JAM', 'URAIAN KEGIATAN / PERMASALAHAN', 'TINDAK LANJUT', 'JAM SELESAI', 'HASIL / KONDISI', 'KETERANGAN'];
       const headerRow = sheet.getRow(headerRowIdx);
@@ -179,7 +236,6 @@ export default function ReportDetail({
         cell.border = thinBorder; cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       });
 
-      // 4. TABEL UTAMA - DATA
       let currentRowIdx = 7;
       selectedReport.kegiatan?.forEach((k: any, i: number) => {
         const raw = k.uraian || '';
@@ -201,7 +257,6 @@ export default function ReportDetail({
         currentRowIdx++;
       });
 
-      // 5. TABEL TANDA TANGAN - HEADER
       currentRowIdx += 2; 
       const sigHeaderRow = sheet.getRow(currentRowIdx);
       sigHeaderRow.values = ['NO', 'APINDO', 'PARAF', 'OS - IASS', 'PARAF', 'OM - NTI', 'PARAF'];
@@ -211,7 +266,6 @@ export default function ReportDetail({
         cell.border = thinBorder; cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
 
-      // 6. TABEL TANDA TANGAN - DATA
       currentRowIdx++;
       const apindo = selectedReport.personil?.apindo || [];
       const iass = selectedReport.personil?.omIassNti?.slice(0, 4) || [];
@@ -230,7 +284,6 @@ export default function ReportDetail({
         currentRowIdx++;
       }
 
-      // 7. BLOK TANDA TANGAN (Bawah Kanan)
       currentRowIdx -= (maxRows + 1); 
       sheet.mergeCells(`F${currentRowIdx}:H${currentRowIdx}`);
       const cellMengetahui = sheet.getCell(`F${currentRowIdx}`);
@@ -246,7 +299,6 @@ export default function ReportDetail({
       const cellName = sheet.getCell(`F${currentRowIdx}`);
       cellName.value = 'AEP MASHUM NURZAMAN'; cellName.font = { size: 10, bold: true }; cellName.alignment = { horizontal: 'center' };
 
-      // 8. DOKUMENTASI
       currentRowIdx += 3;
       sheet.mergeCells(`A${currentRowIdx}:H${currentRowIdx}`);
       const docHeader = sheet.getCell(`A${currentRowIdx}`);
@@ -292,18 +344,50 @@ export default function ReportDetail({
     const ap = selectedReport.personil?.apindo?.map((p: any) => `👷🏻 ${p.nama}`).join('\n') || '👷🏻 -';
     const is = selectedReport.personil?.omIassNti?.map((p: any) => `👷🏻 ${p.nama}`).join('\n') || '👷🏻 -';
 
-    let text = `Assalamu'alaikum. Wr. Wb\nBersama ini dilaporkan, kegiatan ELECTRONIC & IT FACILITY – KSO HLP pada hari ini ${tgl} sebagai berikut :\n\nELECTRONIC & IT FACILITY – KSO HLP\n`;
-    text += `A. PERSONIL DINAS ${dn} - ELIT\nAPINDO\n${ap}\n\nOM IASS - NTI\n${is}\n\n`;
-    text += `B. LAPORAN KEGIATAN DINAS ${dn} - ELIT\n`;
+    let text = `Assalamu'alaikum. Wr. Wb\nBersama ini dilaporkan, kegiatan ELECTRONIC & IT FACILITY – KSO HLP pada hari ini ${tgl} sebagai berikut :\n\nELECTRONIC & IT FACILITY – KSO HLP\nA. PERSONIL DINAS ${dn} - ELIT\nAPINDO\n${ap}\n\nOM IASS - NTI\n${is}\n\n`;
 
-    selectedReport.kegiatan?.forEach((k: any) => {
-      const urText = k.uraian.replace(/Laporan Dari:[\s\S]*?Uraian:\s*/i, '').replace(/Tindak Lanjut:[\s\S]*/i, '').trim();
-      const jamMulaiClean = k.jamMulai?.replace(/ WIB/gi, '').trim();
-      const jamSelesaiClean = k.jamSelesai?.replace(/ WIB/gi, '').trim();
-      text += `Jam ${jamMulaiClean} - ${jamSelesaiClean} WIB\n- ${urText}\n\n`;
-    });
+    if (isFasilitasOnly) {
+       text += `B. LAPORAN KONDISI FASILITAS – ELIT\n`;
+       const grouped = selectedReport.kondisiFasilitas.reduce((acc: any, curr: any) => {
+         if (!acc[curr.namaPeralatan]) acc[curr.namaPeralatan] = { total: 0, normal: 0, rusak: 0, listRusak: [] };
+         acc[curr.namaPeralatan].total += 1;
+         if (curr.kondisi === 'Normal') acc[curr.namaPeralatan].normal += 1;
+         if (curr.kondisi === 'Rusak') {
+           acc[curr.namaPeralatan].rusak += 1;
+           if(curr.keteranganRusak) acc[curr.namaPeralatan].listRusak.push(`${curr.lokasi} (${curr.keteranganRusak})`);
+         }
+         return acc;
+       }, {});
 
-    text += `\nDemikian disampaikan.\nHaturnuhun`;
+       Object.entries(grouped).forEach(([nama, data]: [string, any]) => {
+         text += `${nama.toUpperCase()} (${data.total} Unit)\n`;
+         text += `- ✅ Normal : ${data.normal} Unit\n`;
+         
+         if (data.rusak > 0) {
+             const ketStr = data.listRusak.length > 0 ? ` (${data.listRusak.join(', ')})` : '';
+             text += `- ❌ Rusak : ${data.rusak} Unit${ketStr}\n\n`;
+         } else {
+             text += `- ❌ Rusak : -\n\n`;
+         }
+       });
+       
+       if (selectedReport.catatan) {
+           text += `Catatan :\n${selectedReport.catatan}\n\n`;
+       } else {
+           text += `"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"\n\n`;
+       }
+       
+    } else {
+        text += `B. LAPORAN KEGIATAN DINAS ${dn} - ELIT\n`;
+        selectedReport.kegiatan?.forEach((k: any) => {
+          const urText = k.uraian.replace(/Laporan Dari:[\s\S]*?Uraian:\s*/i, '').replace(/Tindak Lanjut:[\s\S]*/i, '').trim();
+          const jamMulaiClean = k.jamMulai?.replace(/ WIB/gi, '').trim();
+          const jamSelesaiClean = k.jamSelesai?.replace(/ WIB/gi, '').trim();
+          text += `Jam ${jamMulaiClean} - ${jamSelesaiClean} WIB\n- ${urText}\n\n`;
+        });
+    }
+
+    text += `Demikian disampaikan.\nHaturnuhun`;
     navigator.clipboard.writeText(text);
     alert('✅ Format teks WA berhasil disalin ke clipboard!');
     setExportOpen(false);
@@ -331,7 +415,6 @@ export default function ReportDetail({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 relative">
-          {/* TOMBOL HAPUS KHUSUS ADMIN MUNCUL DI SINI */}
           {userRole === 'ADMIN' && (
             <button 
               onClick={() => handleDelete && handleDelete(selectedReport._id)}
@@ -354,18 +437,27 @@ export default function ReportDetail({
 
               {exportOpen && (
                 <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-[110] animate-fadeIn">
-                  <button id="btn-download-pdf" onClick={downloadPDF} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3">
-                    <span className="text-base">📄</span> Download PDF File
-                  </button>
-                  <button onClick={exportToWord} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 border-t border-slate-50">
+                  
+                  {!isFasilitasOnly && (
+                    <button id="btn-download-pdf" onClick={downloadPDF} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3">
+                      <span className="text-base">📄</span> Download PDF File
+                    </button>
+                  )}
+
+                  <button onClick={exportToWord} className={`w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 ${!isFasilitasOnly ? 'border-t border-slate-50' : ''}`}>
                     <span className="text-base">📝</span> Download Word (.doc)
                   </button>
-                  <button id="btn-download-excel" onClick={exportToExcel} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 border-t border-slate-50">
-                    <span className="text-base">📊</span> Download Excel (.xlsx)
-                  </button>
+
+                  {!isFasilitasOnly && (
+                    <button id="btn-download-excel" onClick={exportToExcel} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 border-t border-slate-50">
+                      <span className="text-base">📊</span> Download Excel (.xlsx)
+                    </button>
+                  )}
+
                   <button onClick={copyFormatWA} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 border-t border-slate-50">
                     <span className="text-base">💬</span> Salin Format Teks WA
                   </button>
+
                 </div>
               )}
             </div>
@@ -390,7 +482,6 @@ export default function ReportDetail({
         </div>
       </div>
 
-      {/* CATATAN REVISI SEKARANG MENAMPILKAN NAMA */}
       {selectedReport.catatanSpv && (
         <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl">
           <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Catatan Supervisor:</h3>
@@ -435,80 +526,126 @@ export default function ReportDetail({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest px-2">Daftar Kegiatan & Aduan</h2>
-        {selectedReport.kegiatan?.map((keg: any, index: number) => {
-          const raw = keg.uraian || '';
-          const lDari = raw.match(/Laporan Dari:\s*(.*?)(?=\n|$)/i)?.[1] || '-';
-          const urText = raw.match(/Uraian:\s*([\s\S]*?)(?=\n*Tindak Lanjut:|$)/i)?.[1] || raw;
-          const tLanjut = raw.match(/Tindak Lanjut:\s*([\s\S]*?)(?=\n*Keterangan:|$)/i)?.[1] || '-';
-          const ket = raw.match(/Keterangan:\s*([\s\S]*)$/i)?.[1] || '-';
+      {isFasilitasOnly ? (
+        <div className="space-y-4">
+          <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest px-2">Daftar Kondisi Fasilitas</h2>
+          <div className="bg-white/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm">
+            {(() => {
+               const grouped = selectedReport.kondisiFasilitas.reduce((acc: any, curr: any) => {
+                 if (!acc[curr.namaPeralatan]) acc[curr.namaPeralatan] = { total: 0, normal: 0, rusak: 0, listRusak: [] };
+                 acc[curr.namaPeralatan].total += 1;
+                 if (curr.kondisi === 'Normal') acc[curr.namaPeralatan].normal += 1;
+                 if (curr.kondisi === 'Rusak') {
+                   acc[curr.namaPeralatan].rusak += 1;
+                   if(curr.keteranganRusak) acc[curr.namaPeralatan].listRusak.push(`${curr.lokasi}: ${curr.keteranganRusak}`);
+                 }
+                 return acc;
+               }, {});
 
-          const jamMulaiClean = keg.jamMulai?.replace(/ WIB/gi, '').trim();
-          const jamSelesaiClean = keg.jamSelesai?.replace(/ WIB/gi, '').trim();
-
-          return (
-            <div key={index} className="bg-white/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
-                <span className="px-3 py-1.5 bg-blue-50 text-blue-600 font-extrabold text-xs rounded-xl border border-blue-100">
-                  {jamMulaiClean} - {jamSelesaiClean} WIB
-                </span>
-                <span className="text-xs font-bold text-slate-500">
-                  Laporan Dari: <strong className="text-slate-800">{lDari}</strong>
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Progress / Uraian</label>
-                    <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{urText}</p>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tindak Lanjut</label>
-                    <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{tLanjut}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Keterangan Tambahan</label>
-                    <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{ket}</p>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Kondisi Akhir</label>
-                    <p className="text-slate-800 font-bold bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{keg.hasilKondisi || '-'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {keg.dokumentasi && keg.dokumentasi.length > 0 && (
-                <div className="pt-4 border-t border-slate-100">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Dokumentasi Foto (Klik untuk memperbesar)</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {keg.dokumentasi.map((foto: string, fIdx: number) => (
-                      <div 
-                        key={fIdx} 
-                        onClick={() => setPreviewImage(foto)}
-                        className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer shadow-sm hover:shadow-md transition-all"
-                      >
-                        <img 
-                          src={foto} 
-                          alt="Dokumentasi" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                          <svg className="w-6 h-6 drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+               return Object.entries(grouped).map(([nama, data]: [string, any], index: number) => (
+                 <div key={index} className="mb-4 pb-4 border-b border-slate-100 last:border-0 last:mb-0 last:pb-0">
+                    <h3 className="font-extrabold text-slate-800 text-sm mb-2">{nama.toUpperCase()} ({data.total} Unit)</h3>
+                    <div className="space-y-1 ml-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-emerald-500 font-bold">✅ Normal :</span>
+                            <span className="text-slate-700 text-sm font-medium">{data.normal} Unit</span>
                         </div>
-                      </div>
-                    ))}
+                        <div className="flex items-start gap-2">
+                            <span className="text-rose-500 font-bold">❌ Rusak :</span>
+                            <span className="text-slate-700 text-sm font-medium">
+                                {data.rusak > 0 ? `${data.rusak} Unit ${data.listRusak.length > 0 ? `(${data.listRusak.join(', ')})` : ''}` : '-'}
+                            </span>
+                        </div>
+                    </div>
+                 </div>
+               ));
+            })()}
+            {selectedReport.catatan && (
+                <div className="mt-6 pt-6 border-t border-slate-200">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Catatan Tambahan</h3>
+                    <p className="text-sm text-slate-800 font-medium whitespace-pre-line bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        {selectedReport.catatan}
+                    </p>
+                </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest px-2">Daftar Kegiatan & Aduan</h2>
+          {selectedReport.kegiatan?.map((keg: any, index: number) => {
+            const raw = keg.uraian || '';
+            const lDari = raw.match(/Laporan Dari:\s*(.*?)(?=\n|$)/i)?.[1] || '-';
+            const urText = raw.match(/Uraian:\s*([\s\S]*?)(?=\n*Tindak Lanjut:|$)/i)?.[1] || raw;
+            const tLanjut = raw.match(/Tindak Lanjut:\s*([\s\S]*?)(?=\n*Keterangan:|$)/i)?.[1] || '-';
+            const ket = raw.match(/Keterangan:\s*([\s\S]*)$/i)?.[1] || '-';
+
+            const jamMulaiClean = keg.jamMulai?.replace(/ WIB/gi, '').trim();
+            const jamSelesaiClean = keg.jamSelesai?.replace(/ WIB/gi, '').trim();
+
+            return (
+              <div key={index} className="bg-white/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                  <span className="px-3 py-1.5 bg-blue-50 text-blue-600 font-extrabold text-xs rounded-xl border border-blue-100">
+                    {jamMulaiClean} - {jamSelesaiClean} WIB
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">
+                    Laporan Dari: <strong className="text-slate-800">{lDari}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Progress / Uraian</label>
+                      <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{urText}</p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tindak Lanjut</label>
+                      <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{tLanjut}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Keterangan Tambahan</label>
+                      <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{ket}</p>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Kondisi Akhir</label>
+                      <p className="text-slate-800 font-bold bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{keg.hasilKondisi || '-'}</p>
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+
+                {keg.dokumentasi && keg.dokumentasi.length > 0 && (
+                  <div className="pt-4 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Dokumentasi Foto (Klik untuk memperbesar)</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      {keg.dokumentasi.map((foto: string, fIdx: number) => (
+                        <div 
+                          key={fIdx} 
+                          onClick={() => setPreviewImage(foto)}
+                          className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer shadow-sm hover:shadow-md transition-all"
+                        >
+                          <img 
+                            src={foto} 
+                            alt="Dokumentasi" 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <svg className="w-6 h-6 drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {selectedReport.editHistory && selectedReport.editHistory.length > 0 && (
         <div className="bg-white/60 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-5 mt-6">
