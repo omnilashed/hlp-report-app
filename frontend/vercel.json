@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://made-period-wife-staffing.trycloudflare.com/api/$1"
+      "destination": "https://continuously-habitat-prev-geology.trycloudflare.com/api/$1"
     },
     {
       "source": "/(.*)",
