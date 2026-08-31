@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://yamaha-realty-evolution-hills.trycloudflare.com/api/$1"
+      "destination": "https://prev-references-specialist-remained.trycloudflare.com/api/$1"
     },
     {
       "source": "/(.*)",
