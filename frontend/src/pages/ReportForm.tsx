@@ -18,16 +18,29 @@ const apindoList = ['AEP MASHUM NURZAMAN', 'RAHMAT D. CAHYO', 'EKA YULIANI S.', 
 const iassList = ['ADELIA PUSPITA', 'ABDUL KODIR', 'ROIM', 'DENNIS SAYYIDINAA R', 'YUDHA ISMUNANDAR', 'AHMAD FANGKY S.', 'KARUNIAWAN GEOVANI', 'MAHDI ALHABSYI'];
 const ntiList = ['LUTHFIANDA MUZAKI S', 'FARIZ SOLAHUDIN', 'ZAKY ALHADY', 'MUHAMMAD FACHREZA', 'YOAN HERNANTRA'];
 
+const tugasRutin = [
+  "Serah Terima Dinas Malam ke Dinas Pagi.",
+  "Serah Terima Dinas Pagi ke Dinas Malam.",
+  "Pembuatan Laporan Harian Shift MALAM.",
+  "Pembuatan Laporan Harian Shift PAGI.",
+  "Melakukan pengecekan & konfigurasi resolusi CCTV.",
+  "Melakukan preventif maintenance harian X-Ray, WTMD, HHMD.",
+  "Melakukan pengecekan harian peralatan Elektronika dan IT di Bandara Halim PK.",
+  "Melakukan pengecekan dan pembersihan X-Ray."
+];
+
 export default function ReportForm({ shift, initialData, onBack }: ReportFormProps) {
   const [currentShift, setCurrentShift] = useState<'PAGI' | 'MALAM'>(initialData?.dinas || shift);
   const [activeTab, setActiveTab] = useState('umum');
   const [hari, setHari] = useState('30'); 
   const [bulan, setBulan] = useState('Juli'); 
   const [tahun, setTahun] = useState('2026');
+  const [jamMulaiShift, setJamMulaiShift] = useState('');
+  const [jamSelesaiShift, setJamSelesaiShift] = useState('');
   const [apindo, setApindo] = useState([{ nama: '' }]); 
   const [osIass, setOsIass] = useState([{ nama: '' }]); 
   const [omNti, setOmNti] = useState([{ nama: '' }]);
-  const [kegiatan, setKegiatan] = useState([{ laporanDari: 'ELIT', jamMulaiH: '07', jamMulaiM: '00', uraian: '- ', tindakLanjut: '-', jamSelesaiH: '07', jamSelesaiM: '30', hasilKondisi: '-', keterangan: '-', dokumentasi: [] as string[] }]);
+  const [kegiatan, setKegiatan] = useState([{ laporanDari: 'ELIT', jamMulaiH: '07', jamMulaiM: '00', uraian: '', tindakLanjut: '-', jamSelesaiH: '07', jamSelesaiM: '30', hasilKondisi: '-', keterangan: '-', dokumentasi: [] as string[] }]);
 
   const [status, setStatus] = useState('Draft');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,7 +57,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [cropAspect, setCropAspect] = useState<number>(3 / 4);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
-  // Custom Alert State
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', type: 'warning' as 'success' | 'error' | 'warning' });
 
   const isLocked = status === 'Menunggu SPV' || status === 'Menunggu Asmen' || status === 'Approved';
@@ -59,6 +71,8 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
       if (initialData.dinas) setCurrentShift(initialData.dinas);
       const parts = initialData.tanggal.split(' ');
       if (parts.length === 3) { setHari(parts[0]); setBulan(parts[1]); setTahun(parts[2]); }
+      if (initialData.jamMulaiShift) setJamMulaiShift(initialData.jamMulaiShift);
+      if (initialData.jamSelesaiShift) setJamSelesaiShift(initialData.jamSelesaiShift);
       if (initialData.personil) {
         if (initialData.personil.apindo?.length) setApindo(initialData.personil.apindo);
         const allOm = initialData.personil.omIassNti || [];
@@ -69,7 +83,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
         const parsed = initialData.kegiatan.map((k: any) => {
           const raw = k.uraian || '';
           const lDari = raw.match(/Laporan Dari:\s*(.*?)(?=\n|$)/i)?.[1] || 'ELIT';
-          const urText = raw.match(/Uraian:\s*([\s\S]*?)(?=\n*Tindak Lanjut:|$)/i)?.[1] || '- ';
+          const urText = raw.match(/Uraian:\s*([\s\S]*?)(?=\n*Tindak Lanjut:|$)/i)?.[1] || '';
           const tLanjut = raw.match(/Tindak Lanjut:\s*([\s\S]*?)(?=\n*Keterangan:|$)/i)?.[1] || '-';
           const ket = raw.match(/Keterangan:\s*([\s\S]*)$/i)?.[1] || '-';
           const jm = k.jamMulai?.replace(' WIB', '').split('.') || ['07', '00'];
@@ -103,7 +117,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
             if (result.omNti?.length) setOmNti(result.omNti);
           }
         }
-      } catch (err) { console.error(err); }
+      } catch (err) {}
     };
     fetchAttendance();
   }, [hari, bulan, tahun, currentShift, initialData]);
@@ -256,6 +270,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     if (status === 'Draft' || status === 'Revisi') newStatus = 'Menunggu SPV';
     const dataLaporan = {
       fungsi: 'ELECTRONIC & IT FACILITY', dinas: currentShift, tanggal: `${hari} ${bulan} ${tahun}`,
+      jamMulaiShift, jamSelesaiShift,
       status: newStatus,
       personil: { apindo: apindo.filter(p => p.nama), omIassNti: [...osIass.filter(p => p.nama), ...omNti.filter(p => p.nama)] },
       kegiatan: dataKegiatan, kondisiFasilitas: []
@@ -287,7 +302,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-2 sm:p-6 md:p-10 font-sans flex justify-center text-slate-800 w-full overflow-x-hidden relative">
       
-      {/* Custom Alert Modal */}
       {alertConfig.isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl relative flex flex-col overflow-hidden text-center border border-slate-100">
@@ -370,11 +384,24 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
               <div className="space-y-8 sm:space-y-12 animate-fadeIn max-w-3xl w-full">
                 <div className="space-y-4 w-full">
                   <h2 className="text-xs sm:text-sm font-extrabold text-slate-500 uppercase tracking-widest flex items-center"><div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>Waktu Pelaksanaan</h2>
+                  
                   <div className="flex gap-2 sm:gap-3 w-full">
                     <select disabled={isLocked} value={hari} onChange={(e) => setHari(e.target.value)} className="flex-1 p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60">{days.map(d => <option key={d} value={d}>{d}</option>)}</select>
                     <select disabled={isLocked} value={bulan} onChange={(e) => setBulan(e.target.value)} className="flex-[2] p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60">{months.map(m => <option key={m} value={m}>{m}</option>)}</select>
                     <select disabled={isLocked} value={tahun} onChange={(e) => setTahun(e.target.value)} className="flex-1 p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60">{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
                   </div>
+                  
+                  <div className="flex gap-3 sm:gap-4 w-full mt-2">
+                    <div className="flex-1">
+                      <label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Jam Mulai Shift</label>
+                      <input type="time" disabled={isLocked} value={jamMulaiShift} onChange={(e) => setJamMulaiShift(e.target.value)} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Jam Selesai Shift</label>
+                      <input type="time" disabled={isLocked} value={jamSelesaiShift} onChange={(e) => setJamSelesaiShift(e.target.value)} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60" />
+                    </div>
+                  </div>
+                  
                 </div>
                 <div className="space-y-4 w-full">
                   <h2 className="text-xs sm:text-sm font-extrabold text-slate-500 uppercase tracking-widest flex items-center"><div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>Tim Bertugas</h2>
@@ -426,7 +453,37 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-y-4 gap-x-6 mt-8 sm:mt-4 w-full">
                       <div className="md:col-span-3 w-full"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Laporan Dari</label><input disabled={isLocked} type="text" value={item.laporanDari} onChange={(e) => { const n = [...kegiatan]; n[index].laporanDari = e.target.value; setKegiatan(n); }} className="w-full p-2.5 sm:p-3.5 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60" /></div>
                       <div className="md:col-span-4 w-full"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Jam Mulai</label><div className="flex items-center bg-white/60 border border-white/60 shadow-inner rounded-xl p-1"><select disabled={isLocked} value={item.jamMulaiH} onChange={(e) => { const n = [...kegiatan]; n[index].jamMulaiH = e.target.value; setKegiatan(n); }} className="flex-1 p-1.5 sm:p-2 bg-transparent outline-none font-bold text-center text-xs sm:text-sm text-slate-700 disabled:opacity-60">{hours.map(h => <option key={h}>{h}</option>)}</select><span className="font-bold text-slate-400">:</span><select disabled={isLocked} value={item.jamMulaiM} onChange={(e) => { const n = [...kegiatan]; n[index].jamMulaiM = e.target.value; setKegiatan(n); }} className="flex-1 p-1.5 sm:p-2 bg-transparent outline-none font-bold text-center text-xs sm:text-sm text-slate-700 disabled:opacity-60">{minutes.map(m => <option key={m}>{m}</option>)}</select></div></div>
-                      <div className="md:col-span-5 w-full"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Progress Aduan</label><textarea disabled={isLocked} value={item.uraian} onChange={(e) => { const n = [...kegiatan]; n[index].uraian = e.target.value; setKegiatan(n); }} onKeyDown={(e) => handleKeyDown(e, index, 'uraian')} className="w-full p-2.5 sm:p-3.5 bg-white/60 border border-white/60 shadow-inner rounded-xl outline-none font-medium text-slate-700 text-xs sm:text-sm min-h-[60px] sm:min-h-[80px] focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60" /></div>
+                      <div className="md:col-span-5 w-full">
+                        <label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Progress Aduan</label>
+                        {!isLocked && (
+                          <select 
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                const n = [...kegiatan];
+                                const currentVal = n[index].uraian;
+                                const prefix = currentVal && currentVal.trim() !== '' ? '\n- ' : '- ';
+                                n[index].uraian = currentVal + prefix + e.target.value;
+                                setKegiatan(n);
+                                e.target.value = '';
+                              }
+                            }}
+                            className="w-full p-2 mb-2 bg-blue-50/50 border border-blue-200/60 rounded-lg outline-none font-bold text-blue-600 text-[10px] sm:text-xs shadow-sm focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                          >
+                            <option value="">+ Pilih tugas rutin cepat...</option>
+                            {tugasRutin.map((tugas, i) => (
+                              <option key={i} value={tugas}>{tugas}</option>
+                            ))}
+                          </select>
+                        )}
+                        <textarea 
+                          disabled={isLocked} 
+                          value={item.uraian} 
+                          onChange={(e) => { const n = [...kegiatan]; n[index].uraian = e.target.value; setKegiatan(n); }} 
+                          onKeyDown={(e) => handleKeyDown(e, index, 'uraian')} 
+                          placeholder="Ketik manual atau pilih dari menu di atas..."
+                          className="w-full p-2.5 sm:p-3.5 bg-white/60 border border-white/60 shadow-inner rounded-xl outline-none font-medium text-slate-700 text-xs sm:text-sm min-h-[60px] sm:min-h-[80px] focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60" 
+                        />
+                      </div>
                       <div className="md:col-span-4 w-full"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Jam Selesai</label><div className="flex items-center bg-white/60 border border-white/60 shadow-inner rounded-xl p-1"><select disabled={isLocked} value={item.jamSelesaiH} onChange={(e) => { const n = [...kegiatan]; n[index].jamSelesaiH = e.target.value; setKegiatan(n); }} className="flex-1 p-1.5 sm:p-2 bg-transparent outline-none font-bold text-center text-xs sm:text-sm text-slate-700 disabled:opacity-60">{hours.map(h => <option key={h}>{h}</option>)}</select><span className="font-bold text-slate-400">:</span><select disabled={isLocked} value={item.jamSelesaiM} onChange={(e) => { const n = [...kegiatan]; n[index].jamSelesaiM = e.target.value; setKegiatan(n); }} className="flex-1 p-1.5 sm:p-2 bg-transparent outline-none font-bold text-center text-xs sm:text-sm text-slate-700 disabled:opacity-60">{minutes.map(m => <option key={m}>{m}</option>)}</select></div></div>
                       <div className="md:col-span-3 w-full"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Tindak Lanjut</label><textarea disabled={isLocked} value={item.tindakLanjut} onChange={(e) => { const n = [...kegiatan]; n[index].tindakLanjut = e.target.value; setKegiatan(n); }} onKeyDown={(e) => handleKeyDown(e, index, 'tindakLanjut')} className="w-full p-2.5 sm:p-3.5 bg-white/60 border border-white/60 shadow-inner rounded-xl outline-none font-medium text-slate-700 text-xs sm:text-sm min-h-[60px] sm:min-h-[80px] focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60" /></div>
                       <div className="md:col-span-2 w-full"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Kondisi Akhir</label><input disabled={isLocked} type="text" value={item.hasilKondisi} onChange={(e) => { const n = [...kegiatan]; n[index].hasilKondisi = e.target.value; setKegiatan(n); }} className="w-full p-2.5 sm:p-3.5 bg-white/60 border border-white/60 shadow-inner rounded-xl outline-none font-medium text-slate-700 text-xs sm:text-sm focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60" /></div>
@@ -435,7 +492,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
                   </div>
                 ))}
                 {!isLocked && (
-                  <button onClick={() => setKegiatan([...kegiatan, { laporanDari: 'ELIT', jamMulaiH: '07', jamMulaiM: '00', uraian: '- ', tindakLanjut: '-', jamSelesaiH: '07', jamSelesaiM: '30', hasilKondisi: '-', keterangan: '-', dokumentasi: [] }])} className="w-full py-3.5 sm:py-4 bg-white/60 border border-white text-blue-700 rounded-2xl font-bold text-xs sm:text-sm hover:bg-white shadow-sm transition-all">
+                  <button onClick={() => setKegiatan([...kegiatan, { laporanDari: 'ELIT', jamMulaiH: '07', jamMulaiM: '00', uraian: '', tindakLanjut: '-', jamSelesaiH: '07', jamSelesaiM: '30', hasilKondisi: '-', keterangan: '-', dokumentasi: [] }])} className="w-full py-3.5 sm:py-4 bg-white/60 border border-white text-blue-700 rounded-2xl font-bold text-xs sm:text-sm hover:bg-white shadow-sm transition-all">
                     + Tambah Progress Laporan
                   </button>
                 )}

@@ -10,6 +10,7 @@ import TableRiwayat from './components/TableRiwayat';
 import ProfileModal from './components/ProfileModal';
 import RejectModal from './components/RejectModal';
 import { PrintTemplate, PrintFasilitasTemplate } from './PrintTemplate';
+import RekapBulanan from './components/RekapBulanan';
 
 type UserRole = 'ADMIN' | 'OFFICE' | 'SUPERVISOR' | 'ASMEN' | 'GUEST';
 
@@ -259,7 +260,7 @@ export default function App() {
             let nomorWA = targetUser?.noWA;
             
             if (nomorWA && nomorWA.trim() !== '') {
-              const waText = `*[NOTIFIKASI HLP LOGBOOK]* 🚨\n\nHalo *${targetUser.namaLengkap || targetUser.username}*,\nLaporan Kegiatan Harian untuk Shift *${report.dinas}* (Tanggal: ${report.tanggal}) membutuhkan perbaikan.\n\n*Catatan Revisi dari Asmen/SPV:*\n_"${catatan}"_\n\nMohon segera masuk ke sistem aplikasi dan perbaiki laporan tersebut.\nTerima kasih.`;
+              const waText = `*[NOTIFIKASI HLP LOGBOOK]* \n\nHalo *${targetUser.namaLengkap || targetUser.username}*,\nLaporan Kegiatan Harian untuk Shift *${report.dinas}* (Tanggal: ${report.tanggal}) membutuhkan perbaikan.\n\n*Catatan Revisi dari Asmen/SPV:*\n_"${catatan}"_\n\nMohon segera masuk ke sistem aplikasi dan perbaiki laporan tersebut.\nTerima kasih.`;
               
               fetch('/api/send-wa', {
                 method: 'POST',
@@ -310,10 +311,10 @@ export default function App() {
 
     if (userRole !== 'ADMIN') {
       if (!isUserRelatedToReport(report)) {
-        return alert('🛑 AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, dan ADMIN yang diizinkan untuk mengedit laporan ini.');
+        return alert(' AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, dan ADMIN yang diizinkan untuk mengedit laporan ini.');
       }
       if (report.status === 'Approved') {
-        return alert('🛑 AKSES DITOLAK!\n\nLaporan sudah berstatus Approved (Final). Hanya ADMIN yang bisa membongkar laporan yang sudah selesai.');
+        return alert(' AKSES DITOLAK!\n\nLaporan sudah berstatus Approved (Final). Hanya ADMIN yang bisa membongkar laporan yang sudah selesai.');
       }
     }
 
@@ -328,10 +329,10 @@ export default function App() {
 
     if (userRole !== 'ADMIN') {
       if (!isUserRelatedToReport(reportTarget)) {
-        return alert('🛑 AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, dan ADMIN yang diizinkan untuk menghapus laporan ini.');
+        return alert(' AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, dan ADMIN yang diizinkan untuk menghapus laporan ini.');
       }
       if (reportTarget.status === 'Approved') {
-        return alert('🛑 AKSES DITOLAK!\n\nLaporan ini sudah disetujui (Approved). HANYA ADMIN yang memiliki wewenang untuk menghapus dokumen Final.');
+        return alert(' AKSES DITOLAK!\n\nLaporan ini sudah disetujui (Approved). HANYA ADMIN yang memiliki wewenang untuk menghapus dokumen Final.');
       }
     }
 
@@ -416,6 +417,10 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 sm:p-8 w-full scrollbar-hide">
           {(currentView === 'dashboard' || currentView === 'riwayat') && (
             <TableRiwayat reports={reports} isLoading={isLoading} canInput={canInput} viewReportDetail={viewReportDetail} editReport={editReport} deleteReport={deleteReport} currentPage={currentPage} totalPages={totalPages} onPageChange={(page) => fetchReports(page)} />
+          )}
+
+          {currentView === 'rekap' && (
+            <RekapBulanan reports={reports} />
           )}
 
           {currentView === 'detail' && selectedReport && (

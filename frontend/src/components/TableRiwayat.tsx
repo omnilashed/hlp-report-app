@@ -14,13 +14,60 @@ interface TableRiwayatProps {
 
 export default function TableRiwayat({ reports, isLoading, canInput, viewReportDetail, editReport, deleteReport, currentPage, totalPages, onPageChange }: TableRiwayatProps) {
   const [activeTab, setActiveTab] = useState<'Logbook' | 'Fasilitas'>('Logbook');
+  
+  // State untuk Filter Tanggal
+  const [dateFilter, setDateFilter] = useState('Semua'); 
+  const [customDate, setCustomDate] = useState('');
 
-  const filteredReports = reports.filter((report: any) => {
-    if (activeTab === 'Fasilitas') {
-      return report.kondisiFasilitas && report.kondisiFasilitas.length > 0;
-    } else {
-      return !report.kondisiFasilitas || report.kondisiFasilitas.length === 0;
+  // Fungsi pengubah teks "30 Juli 2026" menjadi Data Waktu (Date Object)
+  const parseIndonesianDate = (dateString: string) => {
+    if (!dateString) return new Date(0);
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const parts = dateString.split(' ');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const monthIndex = months.indexOf(parts[1]);
+      const year = parseInt(parts[2], 10);
+      return new Date(year, monthIndex, day);
     }
+    return new Date(dateString);
+  };
+
+  // Logika Filter Ganda (Berdasarkan Tab & Berdasarkan Tanggal)
+  const filteredReports = reports.filter((report: any) => {
+    // 1. Filter Tab (Fasilitas / Logbook)
+    const isFasilitasTab = activeTab === 'Fasilitas';
+    const isFasilitasReport = report.kondisiFasilitas && report.kondisiFasilitas.length > 0;
+    if (isFasilitasTab !== !!isFasilitasReport) return false;
+
+    // 2. Filter Tanggal
+    if (dateFilter === 'Semua') return true;
+
+    const reportDate = parseIndonesianDate(report.tanggal);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (dateFilter === 'Hari Ini') {
+      return reportDate.getTime() === today.getTime();
+    } 
+    else if (dateFilter === '7 Hari') {
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      return reportDate >= sevenDaysAgo && reportDate <= today;
+    } 
+    else if (dateFilter === '30 Hari') {
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      return reportDate >= thirtyDaysAgo && reportDate <= today;
+    } 
+    else if (dateFilter === 'Custom' && customDate) {
+      // customDate format HTML adalah YYYY-MM-DD
+      const custom = new Date(customDate);
+      custom.setHours(0, 0, 0, 0);
+      return reportDate.getTime() === custom.getTime();
+    }
+
+    return true;
   });
 
   return (
@@ -29,29 +76,57 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
         <h2 className="font-bold text-slate-800 text-lg">Riwayat Laporan Masuk</h2>
       </div>
 
-      <div className="flex gap-3 p-4 md:px-6 border-b border-white/50 bg-white/20 overflow-x-auto scrollbar-hide">
-        <button
-          onClick={() => setActiveTab('Logbook')}
-          className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
-            activeTab === 'Logbook' 
-              ? 'bg-blue-600 text-white shadow-md' 
-              : 'bg-white/70 text-slate-500 hover:bg-white'
-          }`}
-        >
-          Logbook Harian
-        </button>
-        <button
-          onClick={() => setActiveTab('Fasilitas')}
-          className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
-            activeTab === 'Fasilitas' 
-              ? 'bg-emerald-600 text-white shadow-md' 
-              : 'bg-white/70 text-slate-500 hover:bg-white'
-          }`}
-        >
-          Pengecekan Fasilitas
-        </button>
+      {/* Bagian Header Controls (Tabs & Filter) */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 md:px-6 border-b border-white/50 bg-white/20">
+        
+        {/* Tab Pilihan */}
+        <div className="flex gap-3 overflow-x-auto scrollbar-hide w-full md:w-auto">
+          <button
+            onClick={() => setActiveTab('Logbook')}
+            className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+              activeTab === 'Logbook' ? 'bg-blue-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
+            }`}
+          >
+            Logbook Harian
+          </button>
+          <button
+            onClick={() => setActiveTab('Fasilitas')}
+            className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+              activeTab === 'Fasilitas' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
+            }`}
+          >
+            Pengecekan Fasilitas
+          </button>
+        </div>
+
+        {/* Dropdown Filter Tanggal */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <select 
+            value={dateFilter} 
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="flex-1 md:flex-none px-4 py-2.5 bg-white/80 text-slate-600 text-xs sm:text-sm font-bold rounded-full border border-white outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm cursor-pointer"
+          >
+            <option value="Semua">Semua Waktu</option>
+            <option value="Hari Ini">Hari Ini</option>
+            <option value="7 Hari">7 Hari Terakhir</option>
+            <option value="30 Hari">30 Hari Terakhir</option>
+            <option value="Custom">Pilih Tanggal...</option>
+          </select>
+
+          {/* Muncul otomatis jika pilih Custom */}
+          {dateFilter === 'Custom' && (
+            <input 
+              type="date" 
+              value={customDate}
+              onChange={(e) => setCustomDate(e.target.value)}
+              className="px-4 py-2 bg-white/80 text-slate-600 text-xs sm:text-sm font-bold rounded-full border border-white outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm"
+            />
+          )}
+        </div>
+
       </div>
       
+      {/* Tampilan Tabel Desktop */}
       <div className="hidden md:block overflow-x-auto w-full p-2">
         <table className="w-full text-left border-collapse min-w-[700px]">
           <thead>
@@ -98,12 +173,13 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                 );
               })
             ) : (
-              <tr><td colSpan={5} className="p-10 text-center text-slate-400 font-medium">Belum ada {activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Logbook'} di halaman ini.</td></tr>
+              <tr><td colSpan={5} className="p-10 text-center text-slate-400 font-medium">Laporan tidak ditemukan.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
+      {/* Tampilan Card Mobile */}
       <div className="md:hidden flex flex-col p-4 space-y-4">
         {isLoading ? (
           <div className="p-10 flex flex-col items-center justify-center space-y-3">
@@ -137,10 +213,11 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
             );
           })
         ) : (
-          <div className="text-center text-slate-400 py-10 font-medium">Belum ada {activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Logbook'} di halaman ini.</div>
+          <div className="text-center text-slate-400 py-10 font-medium">Laporan tidak ditemukan.</div>
         )}
       </div>
 
+      {/* Paginasi */}
       {!isLoading && totalPages > 1 && (
         <div className="bg-white/30 p-4 border-t border-slate-200/60 flex justify-between items-center">
           <button 
