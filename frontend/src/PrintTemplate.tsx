@@ -20,7 +20,6 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
   const cellStyle = { border: '1px solid black', padding: '6px', verticalAlign: 'top' as any, color: '#000000', backgroundColor: '#FFFFFF' };
   const headerStyle = { border: '1px solid black', padding: '6px', backgroundColor: themeBg, color: themeText, fontWeight: 'bold', textAlign: 'center' as any, verticalAlign: 'middle' as any };
   
-  // Style tabel bawah abu-abu
   const signatureHeaderStyle = { ...headerStyle, backgroundColor: '#e5e7eb', padding: '4px', fontSize: '10px' };
   const signatureCellStyle = { ...cellStyle, padding: '4px', fontSize: '10px' };
 
@@ -32,9 +31,8 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
   });
 
   return (
-    <div ref={ref} id="print-area" style={{ width: '100%', minWidth: '1024px', padding: '30px', fontFamily: 'Arial, sans-serif', backgroundColor: '#ffffff', color: '#000000' }}>
+    <div ref={ref} id="print-area" style={{ width: '100%', minWidth: '1024px', padding: '30px', fontFamily: 'Arial, sans-serif', backgroundColor: '#ffffff', color: '#000000', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       
-      {/* BAGIAN ATAS: KOP SURAT KIRI & LOGO KANAN (DIJAMIN MENTOK KANAN) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
         <table border={1} style={{ borderCollapse: 'collapse', fontSize: '11px', width: '40%', fontWeight: 'bold', textAlign: 'center' }}>
           <thead>
@@ -62,7 +60,6 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
         LAPORAN KEGIATAN HARIAN (LOG BOOK)
       </h1>
 
-      {/* TABEL UTAMA */}
       <table id="print-table" border={1} style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '40px' }}>
         <thead>
           <tr>
@@ -88,7 +85,7 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
             const jamSelesaiClean = k.jamSelesai?.replace(/ WIB/gi, '').trim();
 
             return (
-              <tr key={i}>
+              <tr key={i} className="break-inside-avoid" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                 <td style={{...cellStyle, textAlign: 'center', fontWeight: 'bold'}}>{i + 1}</td>
                 <td style={{...cellStyle, textAlign: 'center'}}>{lDari}</td>
                 <td style={{...cellStyle, textAlign: 'center'}}>{jamMulaiClean} WIB</td>
@@ -103,8 +100,7 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
         </tbody>
       </table>
 
-      {/* BAGIAN BAWAH: DATA KARYAWAN & TANDA TANGAN */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="break-inside-avoid" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 'auto', paddingTop: '60px' }}>
         <table id="print-table-signature" border={1} style={{ borderCollapse: 'collapse', width: '48%', textAlign: 'center' }}>
           <thead>
             <tr>
@@ -139,7 +135,6 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
         </div>
       </div>
 
-      {/* HALAMAN DOKUMENTASI */}
       {allPhotos.length > 0 && (
         <div className="page-break" style={{ pageBreakBefore: 'always', paddingTop: '30px', width: '100%', position: 'relative' }}>
           <div style={{ position: 'absolute', top: '10px', right: '0px' }}>

@@ -277,7 +277,9 @@ export default function DataPersonel({ userRole }: DataPersonelProps) {
       <div className="p-8 border-b border-slate-200 bg-white rounded-t-[2rem]">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Personnel Management</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {userRole === 'ADMIN' ? 'Personnel Management' : 'Personil'}
+            </h1>
             {userRole === 'ADMIN' && (
               <span className="bg-blue-50 text-blue-700 text-[10px] font-extrabold px-3 py-1.5 rounded-full uppercase tracking-widest border border-blue-100">
                 Admin Only

@@ -42,16 +42,17 @@ export default function Sidebar({ currentView, userRole, isSidebarOpen, setIsSid
               </>
             )}
 
-            {userRole === 'ADMIN' && (
-              <>
-                <li className="px-4 py-3 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Administrator</li>
-                <li>
-                  <button onClick={() => handleMenuClick('personel')} className={getMenuClass('personel')}>
-                    <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> Personnel Management
-                  </button>
-                </li>
-              </>
-            )}
+            <>
+              <li className="px-4 py-3 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {userRole === 'ADMIN' ? 'Administrator' : 'Direktori'}
+              </li>
+              <li>
+                <button onClick={() => handleMenuClick('personel')} className={getMenuClass('personel')}>
+                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg> 
+                  {userRole === 'ADMIN' ? 'Personnel Management' : 'Personil'}
+                </button>
+              </li>
+            </>
 
             <li className="px-4 py-3 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Layanan Pengaduan</li>
             <li>
@@ -62,10 +63,7 @@ export default function Sidebar({ currentView, userRole, isSidebarOpen, setIsSid
               {isLaporanMenuOpen && (
                 <ul className="mb-2">
                   {canInput && (
-                    <>
-                      <li><button onClick={() => openForm('PAGI')} className="w-full flex items-center pl-12 pr-4 py-2.5 hover:bg-white/30 text-left text-slate-500 hover:text-slate-800 transition-all rounded-xl mb-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-3"></div>Buat Laporan</button></li>
-                      <li><button onClick={onFasilitasClick} className="w-full flex items-center pl-12 pr-4 py-2.5 hover:bg-white/30 text-left text-slate-500 hover:text-slate-800 transition-all rounded-xl mb-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-3"></div>Pengecekan Fasilitas</button></li>
-                    </>
+                    <li><button onClick={() => openForm('PAGI')} className="w-full flex items-center pl-12 pr-4 py-2.5 hover:bg-white/30 text-left text-slate-500 hover:text-slate-800 transition-all rounded-xl mb-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-3"></div>Buat Laporan</button></li>
                   )}
                   <li><button onClick={() => handleMenuClick('riwayat')} className={getSubMenuClass('riwayat')}><div className="w-1.5 h-1.5 rounded-full bg-current mr-3"></div>Riwayat Laporan</button></li>
                 </ul>

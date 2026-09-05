@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ReportForm from './pages/ReportForm';
-import FasilitasForm from './pages/FasilitasForm';
+import FasilitasForm from './components/FormFasilitas';
 import Login from './pages/Login';
 import ReportDetail from './pages/ReportDetail';
 import DataPersonel from './pages/DataPersonel';
@@ -309,13 +309,14 @@ export default function App() {
   const editReport = (report: any) => {
     if (userRole === 'GUEST' || userRole === 'ASMEN') return alert('Hak akses dibatasi.');
 
-    if (userRole !== 'ADMIN') {
+    if (userRole !== 'ADMIN' && userRole !== 'SUPERVISOR') {
       if (!isUserRelatedToReport(report)) {
-        return alert(' AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, dan ADMIN yang diizinkan untuk mengedit laporan ini.');
+        return alert('🛑 AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, SPV, dan ADMIN yang diizinkan untuk mengedit laporan ini.');
       }
-      if (report.status === 'Approved') {
-        return alert(' AKSES DITOLAK!\n\nLaporan sudah berstatus Approved (Final). Hanya ADMIN yang bisa membongkar laporan yang sudah selesai.');
-      }
+    }
+
+    if (report.status === 'Approved' && userRole !== 'ADMIN') {
+      return alert('🛑 AKSES DITOLAK!\n\nLaporan sudah berstatus Approved (Final). Hanya ADMIN yang bisa membongkar laporan yang sudah selesai.');
     }
 
     setSelectedReport(report);
@@ -327,13 +328,14 @@ export default function App() {
     const reportTarget = reports.find(r => r._id === id);
     if (!reportTarget) return;
 
-    if (userRole !== 'ADMIN') {
+    if (userRole !== 'ADMIN' && userRole !== 'SUPERVISOR') {
       if (!isUserRelatedToReport(reportTarget)) {
-        return alert(' AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, dan ADMIN yang diizinkan untuk menghapus laporan ini.');
+        return alert('🛑 AKSES DITOLAK!\n\nHanya Pembuat Laporan, Tim Bertugas, SPV, dan ADMIN yang diizinkan untuk menghapus laporan ini.');
       }
-      if (reportTarget.status === 'Approved') {
-        return alert(' AKSES DITOLAK!\n\nLaporan ini sudah disetujui (Approved). HANYA ADMIN yang memiliki wewenang untuk menghapus dokumen Final.');
-      }
+    }
+
+    if (reportTarget.status === 'Approved' && userRole !== 'ADMIN') {
+      return alert('🛑 AKSES DITOLAK!\n\nLaporan ini sudah disetujui (Approved). HANYA ADMIN yang memiliki wewenang untuk menghapus dokumen Final.');
     }
 
     if (window.confirm('Yakin ingin menghapus laporan ini? Tindakan ini permanen.')) {
@@ -416,7 +418,19 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-8 w-full scrollbar-hide">
           {(currentView === 'dashboard' || currentView === 'riwayat') && (
-            <TableRiwayat reports={reports} isLoading={isLoading} canInput={canInput} viewReportDetail={viewReportDetail} editReport={editReport} deleteReport={deleteReport} currentPage={currentPage} totalPages={totalPages} onPageChange={(page) => fetchReports(page)} />
+            <TableRiwayat 
+              reports={reports} 
+              isLoading={isLoading} 
+              canInput={canInput} 
+              viewReportDetail={viewReportDetail} 
+              editReport={editReport} 
+              deleteReport={deleteReport} 
+              currentPage={currentPage} 
+              totalPages={totalPages} 
+              onPageChange={(page) => fetchReports(page)} 
+              userRole={userRole} 
+              userName={userFullName || loginUsername} 
+            />
           )}
 
           {currentView === 'rekap' && (
@@ -441,7 +455,7 @@ export default function App() {
           {currentView === 'personel' && <DataPersonel userRole={userRole} />}
           
           {currentView === 'form' && <ReportForm shift={selectedShift} initialData={selectedReport} onBack={() => setCurrentView('dashboard')} />}
-          {currentView === 'fasilitasForm' && <FasilitasForm initialData={selectedReport} onBack={() => setCurrentView('dashboard')} />}
+          {currentView === 'fasilitasForm' && <FasilitasForm shift={selectedShift} initialData={selectedReport} onBack={() => setCurrentView('dashboard')} />}
         </main>
       </div>
 

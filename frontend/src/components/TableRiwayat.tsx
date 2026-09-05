@@ -10,16 +10,31 @@ interface TableRiwayatProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  userRole: string; 
+  userName: string; 
+  rollbackReport?: (report: any) => void; // Tambahan prop untuk fitur rollback dari tabel
 }
 
-export default function TableRiwayat({ reports, isLoading, canInput, viewReportDetail, editReport, deleteReport, currentPage, totalPages, onPageChange }: TableRiwayatProps) {
+export default function TableRiwayat({ 
+  reports, 
+  isLoading, 
+  canInput, 
+  viewReportDetail, 
+  editReport, 
+  deleteReport, 
+  currentPage, 
+  totalPages, 
+  onPageChange,
+  userRole,
+  userName,
+  rollbackReport // Tambahan
+}: TableRiwayatProps) {
   const [activeTab, setActiveTab] = useState<'Logbook' | 'Fasilitas'>('Logbook');
   
-  // State untuk Filter Tanggal
   const [dateFilter, setDateFilter] = useState('Semua'); 
   const [customDate, setCustomDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Fungsi pengubah teks "30 Juli 2026" menjadi Data Waktu (Date Object)
   const parseIndonesianDate = (dateString: string) => {
     if (!dateString) return new Date(0);
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -33,41 +48,66 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
     return new Date(dateString);
   };
 
-  // Logika Filter Ganda (Berdasarkan Tab & Berdasarkan Tanggal)
   const filteredReports = reports.filter((report: any) => {
-    // 1. Filter Tab (Fasilitas / Logbook)
     const isFasilitasTab = activeTab === 'Fasilitas';
     const isFasilitasReport = report.kondisiFasilitas && report.kondisiFasilitas.length > 0;
     if (isFasilitasTab !== !!isFasilitasReport) return false;
 
-    // 2. Filter Tanggal
-    if (dateFilter === 'Semua') return true;
+    let passDate = true;
+    if (dateFilter !== 'Semua') {
+      const reportDate = parseIndonesianDate(report.tanggal);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const reportDate = parseIndonesianDate(report.tanggal);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+      if (dateFilter === 'Hari Ini') {
+        passDate = reportDate.getTime() === today.getTime();
+      } 
+      else if (dateFilter === '7 Hari') {
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 7);
+        passDate = reportDate >= sevenDaysAgo && reportDate <= today;
+      } 
+      else if (dateFilter === '30 Hari') {
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        passDate = reportDate >= thirtyDaysAgo && reportDate <= today;
+      } 
+      else if (dateFilter === 'Custom' && customDate) {
+        const custom = new Date(customDate);
+        custom.setHours(0, 0, 0, 0);
+        passDate = reportDate.getTime() === custom.getTime();
+      }
+    }
+    if (!passDate) return false;
 
-    if (dateFilter === 'Hari Ini') {
-      return reportDate.getTime() === today.getTime();
-    } 
-    else if (dateFilter === '7 Hari') {
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(today.getDate() - 7);
-      return reportDate >= sevenDaysAgo && reportDate <= today;
-    } 
-    else if (dateFilter === '30 Hari') {
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
-      return reportDate >= thirtyDaysAgo && reportDate <= today;
-    } 
-    else if (dateFilter === 'Custom' && customDate) {
-      // customDate format HTML adalah YYYY-MM-DD
-      const custom = new Date(customDate);
-      custom.setHours(0, 0, 0, 0);
-      return reportDate.getTime() === custom.getTime();
+    if (searchTerm.trim() !== '') {
+      const lowerSearch = searchTerm.toLowerCase();
+      
+      if (isFasilitasTab) {
+        const matchFasilitas = report.kondisiFasilitas?.some((f: any) => 
+          f.namaPeralatan?.toLowerCase().includes(lowerSearch) ||
+          f.keteranganRusak?.toLowerCase().includes(lowerSearch) ||
+          f.lokasi?.toLowerCase().includes(lowerSearch)
+        );
+        const matchCatatan = report.catatan?.toLowerCase().includes(lowerSearch);
+        if (!matchFasilitas && !matchCatatan) return false;
+      } else {
+        const matchKegiatan = report.kegiatan?.some((k: any) => 
+          k.uraian?.toLowerCase().includes(lowerSearch) ||
+          k.tindakLanjut?.toLowerCase().includes(lowerSearch) ||
+          k.keterangan?.toLowerCase().includes(lowerSearch) ||
+          k.hasilKondisi?.toLowerCase().includes(lowerSearch) ||
+          k.laporanDari?.toLowerCase().includes(lowerSearch)
+        );
+        if (!matchKegiatan) return false;
+      }
     }
 
     return true;
+  }).sort((a: any, b: any) => {
+    const dateA = new Date(a.updatedAt || a.createdAt || parseIndonesianDate(a.tanggal)).getTime();
+    const dateB = new Date(b.updatedAt || b.createdAt || parseIndonesianDate(b.tanggal)).getTime();
+    return dateB - dateA;
   });
 
   return (
@@ -76,13 +116,11 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
         <h2 className="font-bold text-slate-800 text-lg">Riwayat Laporan Masuk</h2>
       </div>
 
-      {/* Bagian Header Controls (Tabs & Filter) */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 md:px-6 border-b border-white/50 bg-white/20">
         
-        {/* Tab Pilihan */}
         <div className="flex gap-3 overflow-x-auto scrollbar-hide w-full md:w-auto">
           <button
-            onClick={() => setActiveTab('Logbook')}
+            onClick={() => { setActiveTab('Logbook'); setSearchTerm(''); }}
             className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'Logbook' ? 'bg-blue-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
             }`}
@@ -90,7 +128,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
             Logbook Harian
           </button>
           <button
-            onClick={() => setActiveTab('Fasilitas')}
+            onClick={() => { setActiveTab('Fasilitas'); setSearchTerm(''); }}
             className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'Fasilitas' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
             }`}
@@ -99,12 +137,24 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
           </button>
         </div>
 
-        {/* Dropdown Filter Tanggal */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:flex-none">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </div>
+            <input 
+              type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari alat, kerusakan..."
+              className="w-full md:w-56 pl-9 pr-4 py-2 bg-white/80 text-slate-600 text-xs sm:text-sm font-bold rounded-full border border-white outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm"
+            />
+          </div>
+
           <select 
             value={dateFilter} 
             onChange={(e) => setDateFilter(e.target.value)}
-            className="flex-1 md:flex-none px-4 py-2.5 bg-white/80 text-slate-600 text-xs sm:text-sm font-bold rounded-full border border-white outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm cursor-pointer"
+            className="flex-1 md:flex-none px-4 py-2 bg-white/80 text-slate-600 text-xs sm:text-sm font-bold rounded-full border border-white outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm cursor-pointer"
           >
             <option value="Semua">Semua Waktu</option>
             <option value="Hari Ini">Hari Ini</option>
@@ -113,7 +163,6 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
             <option value="Custom">Pilih Tanggal...</option>
           </select>
 
-          {/* Muncul otomatis jika pilih Custom */}
           {dateFilter === 'Custom' && (
             <input 
               type="date" 
@@ -123,7 +172,6 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
             />
           )}
         </div>
-
       </div>
       
       {/* Tampilan Tabel Desktop */}
@@ -152,6 +200,19 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
               filteredReports.map((report, index) => {
                 const status = report.status || 'Draft';
                 const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-200 text-slate-700 border-slate-300';
+                
+                // LOGIKA HAK AKSES
+                const isPrivileged = userRole === 'SUPERVISOR' || userRole === 'ADMIN';
+                const isCreator = report.user === userName || report.createdBy === userName;
+                const isAssigned = report.personil?.apindo?.some((p: any) => p.nama === userName) || report.personil?.omIassNti?.some((p: any) => p.nama === userName);
+                
+                const canEditThisReport = status !== 'Approved' && (isPrivileged || isCreator || isAssigned);
+                
+                // LOGIKA ROLLBACK SPV & ASMEN DI TABEL
+                const canSpvRollback = userRole === 'SUPERVISOR' && status === 'Menunggu Asmen';
+                const canAsmenRollback = userRole === 'ASMEN' && status === 'Approved';
+                const canShowRollback = rollbackReport && (canSpvRollback || canAsmenRollback);
+
                 return (
                   <tr key={report._id || index} className="border-b border-white/30 hover:bg-white/40 transition-colors">
                     <td className="p-4 text-center font-medium text-slate-500">{(currentPage - 1) * 10 + index + 1}</td>
@@ -161,11 +222,17 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-2">
                         <button onClick={() => viewReportDetail(report)} className="px-4 py-2 bg-white/60 text-blue-600 font-bold rounded-xl hover:bg-white border border-white shadow-sm text-xs transition-all">Detail</button>
-                        {canInput && status !== 'Approved' && (
-                          <>
+                        
+                        {canShowRollback && (
+                           <button onClick={() => rollbackReport(report)} className="px-4 py-2 bg-amber-50 text-amber-600 font-bold rounded-xl hover:bg-amber-100 border border-amber-200 shadow-sm text-xs transition-all">Rollback</button>
+                        )}
+                        
+                        {canEditThisReport && (
                            <button onClick={() => editReport(report)} className="px-4 py-2 bg-yellow-50 text-yellow-600 font-bold rounded-xl hover:bg-yellow-100 border border-yellow-100 shadow-sm text-xs transition-all">Edit</button>
+                        )}
+                        
+                        {userRole === 'ADMIN' && (
                            <button onClick={() => deleteReport(report._id)} className="px-4 py-2 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 border border-red-100 shadow-sm text-xs transition-all">Hapus</button>
-                          </>
                         )}
                       </div>
                     </td>
@@ -190,6 +257,19 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
           filteredReports.map((report, index) => {
             const status = report.status || 'Draft';
             const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-200 text-slate-700 border-slate-300';
+            
+            // LOGIKA HAK AKSES (MOBILE)
+            const isPrivileged = userRole === 'SUPERVISOR' || userRole === 'ADMIN';
+            const isCreator = report.user === userName || report.createdBy === userName;
+            const isAssigned = report.personil?.apindo?.some((p: any) => p.nama === userName) || report.personil?.omIassNti?.some((p: any) => p.nama === userName);
+            
+            const canEditThisReport = status !== 'Approved' && (isPrivileged || isCreator || isAssigned);
+
+            // LOGIKA ROLLBACK SPV & ASMEN DI TABEL (MOBILE)
+            const canSpvRollback = userRole === 'SUPERVISOR' && status === 'Menunggu Asmen';
+            const canAsmenRollback = userRole === 'ASMEN' && status === 'Approved';
+            const canShowRollback = rollbackReport && (canSpvRollback || canAsmenRollback);
+
             return (
               <div key={report._id || index} className="bg-white/60 backdrop-blur-md border border-white/60 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
                 <div className="flex justify-between items-start">
@@ -202,11 +282,17 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
                 </div>
                 <div className="flex flex-wrap gap-2 mt-2 border-t border-white/50 pt-4">
                   <button onClick={() => viewReportDetail(report)} className="flex-1 py-2 bg-blue-50 text-blue-600 font-bold rounded-xl hover:bg-blue-100 shadow-sm text-xs transition-all">Detail</button>
-                  {canInput && status !== 'Approved' && (
-                    <>
+                  
+                  {canShowRollback && (
+                     <button onClick={() => rollbackReport(report)} className="flex-1 py-2 bg-amber-50 text-amber-600 font-bold rounded-xl hover:bg-amber-100 shadow-sm text-xs transition-all">Rollback</button>
+                  )}
+                  
+                  {canEditThisReport && (
                      <button onClick={() => editReport(report)} className="flex-1 py-2 bg-yellow-50 text-yellow-600 font-bold rounded-xl hover:bg-yellow-100 shadow-sm text-xs transition-all">Edit</button>
+                  )}
+                  
+                  {userRole === 'ADMIN' && (
                      <button onClick={() => deleteReport(report._id)} className="flex-1 py-2 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 shadow-sm text-xs transition-all">Hapus</button>
-                    </>
                   )}
                 </div>
               </div>
@@ -217,8 +303,7 @@ export default function TableRiwayat({ reports, isLoading, canInput, viewReportD
         )}
       </div>
 
-      {/* Paginasi */}
-      {!isLoading && totalPages > 1 && (
+      {!isLoading && totalPages > 1 && !searchTerm && (
         <div className="bg-white/30 p-4 border-t border-slate-200/60 flex justify-between items-center">
           <button 
             onClick={() => onPageChange(currentPage - 1)} 
