@@ -56,7 +56,14 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
   const isLocked = status === 'Menunggu Asmen' || status === 'Approved';
-  const showAlert = (message: string, type: 'success' | 'error' | 'warning' = 'warning') => setAlertConfig({ isOpen: true, message, type });
+  const showAlert = (message: string, type: 'success' | 'error' | 'warning' = 'warning') => {
+    setAlertConfig({ isOpen: true, message, type });
+    if (type === 'success') {
+      setTimeout(() => {
+        setAlertConfig(prev => ({ ...prev, isOpen: false }));
+      }, 2500);
+    }
+  };
 
   const generateReportCode = () => {
     const shiftCode = currentShift === 'PAGI' ? 'PG' : 'ML';
@@ -122,27 +129,24 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
 
   const renderBottomAction = () => {
     if (isLocked) return null;
-
     if (activeTab === 'umum') {
       return (
-        <div className="pt-6 sm:pt-8 mt-6 sm:mt-8 border-t border-slate-200/50 w-full pb-4">
-          <button onClick={() => handleTabChange('kegiatan')} className="w-full py-3.5 sm:py-4 bg-blue-600 text-white rounded-2xl font-bold text-xs sm:text-sm hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">Lanjut Isi Logbook ➡️</button>
+        <div className="pt-6 mt-6 border-t border-slate-200 w-full pb-8">
+          <button onClick={() => handleTabChange('kegiatan')} className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-all shadow-sm">Lanjut Isi Logbook ➡️</button>
         </div>
       );
     }
-    
     if (activeTab === 'kegiatan' && !initialData) {
       return (
-        <div className="pt-6 sm:pt-8 mt-6 sm:mt-8 border-t border-slate-200/50 w-full pb-4">
-          <button onClick={() => handleTabChange('fasilitas')} className="w-full py-3.5 sm:py-4 bg-blue-600 text-white rounded-2xl font-bold text-xs sm:text-sm hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all">Lanjut Pengecekan Fasilitas ➡️</button>
+        <div className="pt-6 mt-6 border-t border-slate-200 w-full pb-8">
+          <button onClick={() => handleTabChange('fasilitas')} className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-all shadow-sm">Lanjut Pengecekan Fasilitas ➡️</button>
         </div>
       );
     }
-
     if (activeTab === 'fasilitas' || initialData) {
       return (
-        <div className="pt-6 sm:pt-8 mt-6 sm:mt-8 border-t border-slate-200/50 w-full pb-4">
-          <button onClick={handleInitiateSubmit} disabled={isSubmitting} className="w-full py-3.5 sm:py-4 bg-emerald-500 text-white rounded-2xl font-bold text-xs sm:text-sm hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 disabled:opacity-50">
+        <div className="pt-6 mt-6 border-t border-slate-200 w-full pb-8">
+          <button onClick={handleInitiateSubmit} disabled={isSubmitting} className="w-full sm:w-auto px-8 py-3.5 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50">
             {isSubmitting ? 'MENGIRIM...' : initialData && initialData.kondisiFasilitas?.length > 0 ? 'Simpan Laporan Fasilitas' : 'Simpan Semua (Logbook & Fasilitas)'}
           </button>
         </div>
@@ -153,19 +157,15 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
 
   const handleInitiateSubmit = () => {
     const validKegiatans = kegiatan.filter(k => (k.uraian || '').trim().length > 0);
-    
-    // Pastikan jika ada kegiatan (pembuatan baru atau edit logbook), KOLASE FOTO AKAN MUNCUL
     if (!initialData || (initialData && initialData.kegiatan?.length > 0)) {
       if (validKegiatans.length === 0) { 
         showAlert('TIDAK BISA DISIMPAN: Anda belum mengisi progress aduan (Logbook)!', 'error'); 
         setActiveTab('kegiatan'); 
         return; 
       }
-      // BUKA JENDELA CROP / KOLASE FOTO
       setShowModal(true); 
       setModalStep('collage');
     } else {
-      // Jika hanya edit laporan Fasilitas (yang tidak punya foto)
       handleFinalSubmit(); 
     }
   };
@@ -249,7 +249,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     
     try {
       if (initialData?._id) {
-  
         const dataLaporan = {
           reportCode, fungsi: 'ELECTRONIC & IT FACILITY', dinas: currentShift, tanggal: `${hari} ${bulan} ${tahun}`, jamMulaiShift, jamSelesaiShift,
           status: newStatus, personil: { apindo: apindo.filter(p => p.nama), omIassNti: [...osIass.filter(p => p.nama), ...omNti.filter(p => p.nama)] },
@@ -260,7 +259,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
         const res = await fetch(`/api/reports/${initialData._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(dataLaporan) });
         if (!res.ok) throw new Error('Gagal update laporan.');
       } else {
-        // MODE BUAT BARU (KIRIM 2 DOKUMEN TERPISAH)
         const basePayload = { reportCode, fungsi: 'ELECTRONIC & IT FACILITY', dinas: currentShift, tanggal: `${hari} ${bulan} ${tahun}`, jamMulaiShift, jamSelesaiShift, status: newStatus, personil: { apindo: apindo.filter(p => p.nama), omIassNti: [...osIass.filter(p => p.nama), ...omNti.filter(p => p.nama)] } };
         const dataLogbook = { ...basePayload, kegiatan: dataKegiatan, kondisiFasilitas: [] };
         const dataFasilitas = { ...basePayload, kegiatan: [], kondisiFasilitas: fasilitas, catatan: catatanFasilitas };
@@ -270,25 +268,26 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
         const resFasilitas = await fetch('/api/reports', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(dataFasilitas) });
         if (!resFasilitas.ok) throw new Error('Gagal simpan fasilitas.');
       }
-
       setShowModal(false); showAlert('Semua laporan berhasil diserahkan!', 'success'); setTimeout(onBack, 1500);
     } catch (e: any) { showAlert(`GAGAL MENYIMPAN!\nAlasan: ${e.message}`, 'error'); }
     setIsSubmitting(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-2 sm:p-6 md:p-10 font-sans flex justify-center text-slate-800 w-full overflow-x-hidden relative">
+    <div className="w-full min-h-screen bg-white text-slate-800 font-sans flex flex-col">
+      
+      {/* Aler dan Modals */}
       {alertConfig.isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl relative flex flex-col overflow-hidden text-center border border-slate-100">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl relative flex flex-col text-center border border-slate-200">
             <div className="p-6 pb-2 pt-8 flex justify-center">
-              {alertConfig.type === 'error' ? <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg></div> :
-               alertConfig.type === 'warning' ? <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-500 flex items-center justify-center"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div> :
-               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg></div>}
+              {alertConfig.type === 'error' ? <div className="w-16 h-16 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg></div> :
+               alertConfig.type === 'warning' ? <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div> :
+               <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg></div>}
             </div>
             <div className="p-6 pt-4 space-y-6">
-              <p className="text-sm font-bold text-slate-700 whitespace-pre-line leading-relaxed">{alertConfig.message}</p>
-              {alertConfig.type !== 'success' && <button onClick={() => setAlertConfig({ ...alertConfig, isOpen: false })} className="w-full py-3.5 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-900 transition-all shadow-sm">Mengerti</button>}
+              <p className="text-sm font-medium text-slate-700 whitespace-pre-line leading-relaxed">{alertConfig.message}</p>
+              <button onClick={() => setAlertConfig({ ...alertConfig, isOpen: false })} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold rounded-lg transition-colors">Tutup</button>
             </div>
           </div>
         </div>
@@ -297,82 +296,91 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
       <CropperModal cropQueue={cropQueue} setCropQueue={setCropQueue} crop={crop} setCrop={setCrop} zoom={zoom} setZoom={setZoom} cropAspect={cropAspect} setCropAspect={setCropAspect} setCroppedAreaPixels={setCroppedAreaPixels} handleSaveCrop={handleSaveCrop} />
       <CollageModal showModal={showModal} setShowModal={setShowModal} modalStep={modalStep} setModalStep={setModalStep} slotImages={slotImages} handleUploadToSlot={handleUploadToSlot} removeImageFromSlot={removeImageFromSlot} handleInitiatePreview={handleInitiatePreview} isGenerating={isGenerating} hari={hari} bulan={bulan} tahun={tahun} shift={currentShift} kegiatan={kegiatan} finalCollages={finalCollages} handleFinalSubmit={handleFinalSubmit} isSubmitting={isSubmitting} />
 
-      <div className="w-full max-w-5xl bg-white/50 backdrop-blur-xl rounded-xl sm:rounded-[2rem] border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] flex flex-col h-full sm:h-auto overflow-hidden z-10">
-        <div className="p-4 sm:p-8 md:px-12 pt-6 sm:pt-10 border-b border-white/60 flex flex-col gap-6 bg-white/30">
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <button onClick={onBack} className="p-2 sm:p-3 bg-white/60 border border-white hover:bg-white rounded-xl text-blue-600 transition-all shadow-sm flex-shrink-0"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg></button>
-              <div>
-                <h1 className="text-lg sm:text-2xl font-extrabold tracking-tight text-slate-800">{initialData ? 'Edit Laporan' : 'Form Laporan Terpadu'}</h1>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">Logbook & Pengecekan Fasilitas</p>
-              </div>
-            </div>
-            <div className="self-start sm:self-auto flex bg-white shadow-sm border border-slate-100 p-1 rounded-2xl w-fit">
-              <button type="button" disabled={isLocked} onClick={() => setCurrentShift('PAGI')} className={`px-6 py-2 rounded-xl text-xs font-extrabold tracking-widest transition-all disabled:opacity-60 ${currentShift === 'PAGI' ? 'bg-[#facc15] text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>PAGI</button>
-              <button type="button" disabled={isLocked} onClick={() => setCurrentShift('MALAM')} className={`px-6 py-2 rounded-xl text-xs font-extrabold tracking-widest transition-all disabled:opacity-60 ${currentShift === 'MALAM' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>MALAM</button>
-            </div>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide border-b border-slate-200/50 mt-4">
-            <button onClick={() => handleTabChange('umum')} className={`pb-3 px-2 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'umum' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Tanggal & Personil</button>
-            {(!initialData || (initialData && initialData.kegiatan?.length > 0)) && <button onClick={() => handleTabChange('kegiatan')} className={`pb-3 px-2 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'kegiatan' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Detail Progress Aduan</button>}
-            {(!initialData || (initialData && initialData.kondisiFasilitas?.length > 0)) && <button onClick={() => handleTabChange('fasilitas')} className={`pb-3 px-2 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'fasilitas' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Pengecekan Fasilitas</button>}
-          </div>
-        </div>
-
-        <div className="p-4 sm:p-8 md:px-12 md:py-10 flex-1 overflow-y-auto bg-white/20 flex flex-col w-full">
-          <div className="flex-1 w-full">
-            {activeTab === 'umum' && (
-              <div className="space-y-8 sm:space-y-12 animate-fadeIn max-w-3xl w-full">
-                <div className="space-y-4 w-full bg-white/50 p-5 rounded-2xl border border-white shadow-sm">
-                  <h2 className="text-[10px] sm:text-[11px] font-extrabold text-blue-600 uppercase tracking-widest flex items-center"><svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>REPORT CODE</h2>
-                  <div className="flex flex-col sm:flex-row gap-3 w-full">
-                    <input disabled={isLocked} type="text" readOnly value={reportCode} placeholder="Click generate to create report code..." className="flex-1 p-3 sm:p-4 bg-white border border-slate-200 rounded-xl outline-none font-mono font-bold text-slate-700 text-xs sm:text-sm shadow-inner cursor-not-allowed disabled:opacity-60" />
-                    {!isLocked && <button type="button" onClick={generateReportCode} className="px-6 py-3 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all whitespace-nowrap text-xs sm:text-sm flex items-center justify-center gap-2"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg> Generate Code</button>}
-                  </div>
-                </div>
-                <div className="space-y-4 w-full">
-                  <h2 className="text-xs sm:text-sm font-extrabold text-slate-500 uppercase tracking-widest flex items-center"><div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>Waktu Pelaksanaan</h2>
-                  <div className="flex gap-2 sm:gap-3 w-full">
-                    <select disabled={isLocked} value={hari} onChange={(e) => setHari(e.target.value)} className="flex-1 p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60">{days.map(d => <option key={d} value={d}>{d}</option>)}</select>
-                    <select disabled={isLocked} value={bulan} onChange={(e) => setBulan(e.target.value)} className="flex-[2] p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60">{months.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                    <select disabled={isLocked} value={tahun} onChange={(e) => setTahun(e.target.value)} className="flex-1 p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none font-bold text-slate-700 text-xs sm:text-sm shadow-inner focus:ring-4 focus:ring-blue-500/20 disabled:opacity-60">{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
-                  </div>
-                  <div className="flex gap-3 sm:gap-4 w-full mt-2">
-                    <div className="flex-1"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Jam Mulai Shift</label><input type="time" readOnly disabled value={jamMulaiShift} className="w-full p-3 sm:p-4 bg-slate-100/60 border border-white/60 rounded-xl outline-none font-bold text-slate-400 text-xs sm:text-sm shadow-inner cursor-not-allowed" /></div>
-                    <div className="flex-1"><label className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Jam Selesai Shift</label><input type="time" readOnly disabled value={jamSelesaiShift} className="w-full p-3 sm:p-4 bg-slate-100/60 border border-white/60 rounded-xl outline-none font-bold text-slate-400 text-xs sm:text-sm shadow-inner cursor-not-allowed" /></div>
-                  </div>
-                </div>
-                <div className="space-y-4 w-full">
-                  <h2 className="text-xs sm:text-sm font-extrabold text-slate-500 uppercase tracking-widest flex items-center"><div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>Tim Bertugas</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                    <div className="space-y-3 w-full">
-                      <label className="text-xs font-bold text-slate-600 block ml-1">APINDO</label>
-                      {apindo.map((p, i) => <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...apindo]; n[i].nama = e.target.value; setApindo(n); }} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60"><option value="">- Pilih Personil -</option>{apindoList.map(name => <option key={name} value={name} disabled={apindo.some((person, idx) => person.nama === name && idx !== i)}>{name}</option>)}</select>)}
-                      {!isLocked && <button onClick={() => setApindo([...apindo, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}
-                    </div>
-                    <div className="space-y-3 w-full">
-                      <label className="text-xs font-bold text-slate-600 block ml-1">OS - IASS</label>
-                      {osIass.map((p, i) => <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...osIass]; n[i].nama = e.target.value; setOsIass(n); }} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60"><option value="">- Pilih Personil -</option>{iassList.map(name => <option key={name} value={name} disabled={osIass.some((person, idx) => person.nama === name && idx !== i)}>{name}</option>)}</select>)}
-                      {!isLocked && <button onClick={() => setOsIass([...osIass, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}
-                    </div>
-                    <div className="space-y-3 w-full">
-                      <label className="text-xs font-bold text-slate-600 block ml-1">OM - NTI</label>
-                      {omNti.map((p, i) => <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...omNti]; n[i].nama = e.target.value; setOmNti(n); }} className="w-full p-3 sm:p-4 bg-white/60 border border-white/60 rounded-xl outline-none text-xs sm:text-sm font-medium focus:ring-4 focus:ring-blue-500/20 shadow-inner disabled:opacity-60"><option value="">- Pilih Personil -</option>{ntiList.map(name => <option key={name} value={name} disabled={omNti.some((person, idx) => person.nama === name && idx !== i)}>{name}</option>)}</select>)}
-                      {!isLocked && <button onClick={() => setOmNti([...omNti, { nama: '' }])} className="w-full py-2.5 sm:py-3 text-xs font-bold text-blue-600 bg-white border border-white/60 shadow-sm rounded-xl hover:bg-blue-50">+ Tambah</button>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'kegiatan' && <FormLogbook kegiatan={kegiatan} setKegiatan={setKegiatan} isLocked={isLocked} />}
-            {activeTab === 'fasilitas' && <FormFasilitas fasilitas={fasilitas} setFasilitas={setFasilitas} catatanFasilitas={catatanFasilitas} setCatatanFasilitas={setCatatanFasilitas} isLocked={isLocked} initialData={initialData} showAlert={showAlert} />}
-
-          </div>
+      <div className="w-full px-6 md:px-10 pt-8 pb-4 border-b border-slate-200 bg-white flex flex-col gap-6 shrink-0 z-10">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           
-          {renderBottomAction()}
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-blue-600 transition-colors shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            </button>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800">{initialData ? 'Edit Laporan' : 'Form Laporan Terpadu'}</h1>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Logbook & Pengecekan Fasilitas</p>
+            </div>
+          </div>
+
+          <div className="self-start sm:self-auto flex bg-slate-100 p-1 rounded-lg w-fit">
+            <button type="button" disabled={isLocked} onClick={() => setCurrentShift('PAGI')} className={`px-6 py-2 rounded-md text-xs font-bold tracking-widest transition-colors disabled:opacity-60 ${currentShift === 'PAGI' ? 'bg-[#facc15] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>PAGI</button>
+            <button type="button" disabled={isLocked} onClick={() => setCurrentShift('MALAM')} className={`px-6 py-2 rounded-md text-xs font-bold tracking-widest transition-colors disabled:opacity-60 ${currentShift === 'MALAM' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>MALAM</button>
+          </div>
 
         </div>
+
+        <div className="flex gap-8 overflow-x-auto scrollbar-hide pt-2">
+          <button onClick={() => handleTabChange('umum')} className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${activeTab === 'umum' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Tanggal & Personil</button>
+          {(!initialData || (initialData && initialData.kegiatan?.length > 0)) && <button onClick={() => handleTabChange('kegiatan')} className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${activeTab === 'kegiatan' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Detail Progress Aduan</button>}
+          {(!initialData || (initialData && initialData.kondisiFasilitas?.length > 0)) && <button onClick={() => handleTabChange('fasilitas')} className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${activeTab === 'fasilitas' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Pengecekan Fasilitas</button>}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto bg-white px-6 md:px-10 py-8 w-full flex flex-col">
+        <div className="flex-1 w-full">
+          
+          {activeTab === 'umum' && (
+            <div className="space-y-10 animate-fadeIn w-full max-w-4xl">
+              
+              <div className="space-y-3 w-full">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Report Code</h2>
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  <input disabled={isLocked} type="text" readOnly value={reportCode} placeholder="Klik tombol generate..." className="flex-1 p-3.5 bg-slate-50 border border-slate-200 rounded-lg outline-none font-mono font-bold text-slate-700 text-sm cursor-not-allowed disabled:opacity-60" />
+                  {!isLocked && <button type="button" onClick={generateReportCode} className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-blue-600 font-bold rounded-lg transition-colors whitespace-nowrap text-sm flex items-center justify-center gap-2">Generate Code</button>}
+                </div>
+              </div>
+
+              <div className="space-y-3 w-full">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Waktu Pelaksanaan</h2>
+                <div className="flex gap-3 w-full">
+                  <select disabled={isLocked} value={hari} onChange={(e) => setHari(e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-lg outline-none font-medium text-slate-700 text-sm disabled:opacity-60">{days.map(d => <option key={d} value={d}>{d}</option>)}</select>
+                  <select disabled={isLocked} value={bulan} onChange={(e) => setBulan(e.target.value)} className="flex-[2] p-3.5 bg-white border border-slate-200 rounded-lg outline-none font-medium text-slate-700 text-sm disabled:opacity-60">{months.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  <select disabled={isLocked} value={tahun} onChange={(e) => setTahun(e.target.value)} className="flex-1 p-3.5 bg-white border border-slate-200 rounded-lg outline-none font-medium text-slate-700 text-sm disabled:opacity-60">{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                </div>
+                <div className="flex gap-4 w-full mt-2">
+                  <div className="flex-1"><label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Jam Mulai Shift</label><input type="time" readOnly disabled value={jamMulaiShift} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium text-slate-400 text-sm cursor-not-allowed" /></div>
+                  <div className="flex-1"><label className="text-[11px] font-medium text-slate-500 mb-1.5 block">Jam Selesai Shift</label><input type="time" readOnly disabled value={jamSelesaiShift} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-lg outline-none font-medium text-slate-400 text-sm cursor-not-allowed" /></div>
+                </div>
+              </div>
+
+              <div className="space-y-3 w-full">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tim Bertugas</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                  <div className="space-y-3 w-full">
+                    <label className="text-xs font-semibold text-slate-600 block">APINDO</label>
+                    {apindo.map((p, i) => <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...apindo]; n[i].nama = e.target.value; setApindo(n); }} className="w-full p-3.5 bg-white border border-slate-200 rounded-lg outline-none text-sm font-medium disabled:opacity-60"><option value="">- Pilih Personil -</option>{apindoList.map(name => <option key={name} value={name} disabled={apindo.some((person, idx) => person.nama === name && idx !== i)}>{name}</option>)}</select>)}
+                    {!isLocked && <button onClick={() => setApindo([...apindo, { nama: '' }])} className="w-full py-3 text-xs font-bold text-blue-600 bg-white border border-slate-200 border-dashed rounded-lg hover:bg-slate-50">+ Tambah</button>}
+                  </div>
+                  <div className="space-y-3 w-full">
+                    <label className="text-xs font-semibold text-slate-600 block">OS - IASS</label>
+                    {osIass.map((p, i) => <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...osIass]; n[i].nama = e.target.value; setOsIass(n); }} className="w-full p-3.5 bg-white border border-slate-200 rounded-lg outline-none text-sm font-medium disabled:opacity-60"><option value="">- Pilih Personil -</option>{iassList.map(name => <option key={name} value={name} disabled={osIass.some((person, idx) => person.nama === name && idx !== i)}>{name}</option>)}</select>)}
+                    {!isLocked && <button onClick={() => setOsIass([...osIass, { nama: '' }])} className="w-full py-3 text-xs font-bold text-blue-600 bg-white border border-slate-200 border-dashed rounded-lg hover:bg-slate-50">+ Tambah</button>}
+                  </div>
+                  <div className="space-y-3 w-full">
+                    <label className="text-xs font-semibold text-slate-600 block">OM - NTI</label>
+                    {omNti.map((p, i) => <select disabled={isLocked} key={i} value={p.nama} onChange={(e) => { const n = [...omNti]; n[i].nama = e.target.value; setOmNti(n); }} className="w-full p-3.5 bg-white border border-slate-200 rounded-lg outline-none text-sm font-medium disabled:opacity-60"><option value="">- Pilih Personil -</option>{ntiList.map(name => <option key={name} value={name} disabled={omNti.some((person, idx) => person.nama === name && idx !== i)}>{name}</option>)}</select>)}
+                    {!isLocked && <button onClick={() => setOmNti([...omNti, { nama: '' }])} className="w-full py-3 text-xs font-bold text-blue-600 bg-white border border-slate-200 border-dashed rounded-lg hover:bg-slate-50">+ Tambah</button>}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 2 DENGAN TOMBOL FOTO KHUSUS */}
+          {activeTab === 'kegiatan' && <FormLogbook kegiatan={kegiatan} setKegiatan={setKegiatan} isLocked={isLocked} onOpenPhotoModal={() => { setShowModal(true); setModalStep('collage'); }} />}
+          
+          {activeTab === 'fasilitas' && <FormFasilitas fasilitas={fasilitas} setFasilitas={setFasilitas} catatanFasilitas={catatanFasilitas} setCatatanFasilitas={setCatatanFasilitas} isLocked={isLocked} initialData={initialData} showAlert={showAlert} />}
+        </div>
+        
+        {renderBottomAction()}
       </div>
     </div>
   );

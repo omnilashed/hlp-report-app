@@ -38,12 +38,10 @@ export default function ReportDetail({
   const isApproved = status === 'Approved';
   const isMenungguAsmen = status === 'Menunggu Asmen';
   
-  // LOGIKA HAK AKSES ROLLBACK (SPV & ASMEN)
   const canSpvRollback = userRole === 'SUPERVISOR' && isMenungguAsmen;
   const canAsmenRollback = userRole === 'ASMEN' && isApproved;
   const canRollback = canSpvRollback || canAsmenRollback;
 
-  // Tentukan target status saat rollback ditekan berdasarkan Role
   const targetStatusAfterRollback = userRole === 'ASMEN' ? 'Menunggu Asmen' : 'Menunggu SPV';
 
   const executeRollback = async () => {
@@ -74,9 +72,8 @@ export default function ReportDetail({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 pb-16 font-sans relative">
+    <div className="w-full space-y-6 pb-16 font-sans relative">
       
-      {/* Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/60 backdrop-blur-xl p-6 rounded-3xl border border-white/80 shadow-sm relative z-20">
         <div className="flex items-center gap-4">
           <button 
@@ -124,10 +121,8 @@ export default function ReportDetail({
         </div>
       </div>
 
-      {/* Main Content View (Notes, Personnel, Fasilitas/Kegiatan, History) */}
       <ReportDataView selectedReport={selectedReport} isFasilitasOnly={isFasilitasOnly} />
 
-      {/* CUSTOM POP-UP ROLLBACK DI TENGAH LAYAR (DINAMIS UNTUK SPV & ASMEN) */}
       {showRollbackModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-3xl w-full max-w-sm p-8 shadow-2xl flex flex-col text-center border border-slate-100">
