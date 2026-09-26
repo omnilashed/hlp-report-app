@@ -26,7 +26,7 @@ export default function CollageModal({
   if (!showModal) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 md:pl-[260px]">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
       <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-[2rem] shadow-2xl w-full max-w-5xl z-10 flex flex-col overflow-hidden animate-fadeIn max-h-[95vh]">
         

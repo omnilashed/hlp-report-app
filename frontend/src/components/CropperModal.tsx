@@ -20,7 +20,10 @@ export default function CropperModal({
   if (cropQueue.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 flex items-center justify-center p-4 md:pl-[260px] bg-slate-900/80 backdrop-blur-sm"
+      style={{ zIndex: 999999 }}
+    >
       <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl flex flex-col h-[85vh] animate-fadeIn">
         <div className="p-4 border-b border-slate-100 text-center font-extrabold text-slate-800 flex justify-between items-center">
           <span>Sesuaikan Foto ({cropQueue.length} antrean)</span>
