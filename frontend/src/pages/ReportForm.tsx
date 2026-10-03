@@ -10,16 +10,26 @@ const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2,
 const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const years = ['2025', '2026', '2027', '2028', '2029', '2030', '2031', '2032', '2033', '2034', '2035', '2036', '2037', '2038', '2039', '2040'];
 
-const apindoList = ['AEP MASHUM NURZAMAN', 'RAHMAT D. CAHYO', 'EKA YULIANI S.', 'RIZKO E. NUGRAHA', 'ISTIANAH RAHMAH DEWI', 'MAULANA HADY C. S.'];
-const iassList = ['ADELIA PUSPITA', 'ABDUL KODIR', 'ROIM', 'DENNIS SAYYIDINAA R', 'YUDHA ISMUNANDAR', 'AHMAD FANGKY S.', 'KARUNIAWAN GEOVANI', 'MAHDI ALHABSYI'];
-const ntiList = ['LUTHFIANDA MUZAKI S', 'FARIZ SOLAHUDIN', 'ZAKY ALHADY', 'MUHAMMAD FACHREZA', 'YOAN HERNANTRA'];
-
 const today = new Date();
 const defaultHari = today.getDate().toString().padStart(2, '0');
 const defaultBulan = months[today.getMonth()];
 const defaultTahun = today.getFullYear().toString();
 
 export default function ReportForm({ shift, initialData, onBack }: ReportFormProps) {
+  // STATE DAFTAR PEGAWAI DENGAN NILAI DEFAULT (BAN SEREP) AGAR TIDAK KOSONG
+  const [apindoList, setApindoList] = useState<string[]>([
+    'AEP MASHUM NURZAMAN', 'RAHMAT D. CAHYO', 'EKA YULIANI S.', 
+    'RIZKO E. NUGRAHA', 'ISTIANAH RAHMAH DEWI', 'MAULANA HADY C. S.'
+  ]);
+  const [iassList, setIassList] = useState<string[]>([
+    'ADELIA PUSPITA', 'MAHDI ALHABSYI', 'M. ROIM', 'AHMAD FANGKY S.', 
+    'DENNIS SAYYIDINAA R.', 'ABDUL KODIR', 'YUDHA ISMUNANDAR', 'KARUNIAWAN GEOVANI'
+  ]);
+  const [ntiList, setNtiList] = useState<string[]>([
+    'LUTHFIANDA MUZAKI S', 'YOAN HERNANTRA', 'FARIZ SOLAHUDIN', 
+    'MUHAMMAD FACHREZA', 'ZAKY ALHADY', 'DESI DWI NUR HARTATI'
+  ]);
+
   const [currentShift, setCurrentShift] = useState<'PAGI' | 'MALAM'>(initialData?.dinas || shift);
   const [activeTab, setActiveTab] = useState('umum');
   
@@ -72,6 +82,33 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
     setReportCode(`ELIT-${dateCode}-${shiftCode}-${randomStr}`);
   };
+
+  // MENGAMBIL DATA PEGAWAI SECARA DINAMIS (DENGAN PROTEKSI)
+  useEffect(() => {
+    const fetchPersonnelData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/personnel', { 
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          const apindoData = data.filter((p: any) => p.instansi === 'APINDO').map((p: any) => p.namaLengkap);
+          const iassData = data.filter((p: any) => p.instansi === 'OS - IASS' || p.instansi === 'IASS').map((p: any) => p.namaLengkap);
+          const ntiData = data.filter((p: any) => p.instansi === 'OM - NTI' || p.instansi === 'NTI').map((p: any) => p.namaLengkap);
+          
+          // Hanya ganti data jika array dari database tidak kosong
+          if (apindoData.length > 0) setApindoList(apindoData);
+          if (iassData.length > 0) setIassList(iassData);
+          if (ntiData.length > 0) setNtiList(ntiData);
+        }
+      } catch (error) {
+        console.error("Gagal menarik data pegawai dari server.", error);
+      }
+    };
+    fetchPersonnelData();
+  }, []);
 
   useEffect(() => {
     if (currentShift === 'PAGI') { setJamMulaiShift('07:00'); setJamSelesaiShift('19:00'); } 
