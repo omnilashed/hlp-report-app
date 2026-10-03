@@ -16,7 +16,6 @@ const defaultBulan = months[today.getMonth()];
 const defaultTahun = today.getFullYear().toString();
 
 export default function ReportForm({ shift, initialData, onBack }: ReportFormProps) {
-  // STATE DAFTAR PEGAWAI DENGAN NILAI DEFAULT (BAN SEREP) AGAR TIDAK KOSONG
   const [apindoList, setApindoList] = useState<string[]>([
     'AEP MASHUM NURZAMAN', 'RAHMAT D. CAHYO', 'EKA YULIANI S.', 
     'RIZKO E. NUGRAHA', 'ISTIANAH RAHMAH DEWI', 'MAULANA HADY C. S.'
@@ -36,7 +35,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [hari, setHari] = useState(defaultHari); 
   const [bulan, setBulan] = useState(defaultBulan); 
   const [tahun, setTahun] = useState(defaultTahun);
-  const [reportCode, setReportCode] = useState(initialData?.reportCode || '');
+  const [reportCode, setReportCode] = useState(initialData?.reportCode || initialData?.kodeLaporan || '');
 
   const [jamMulaiShift, setJamMulaiShift] = useState(currentShift === 'PAGI' ? '07:00' : '19:00');
   const [jamSelesaiShift, setJamSelesaiShift] = useState(currentShift === 'PAGI' ? '19:00' : '07:00');
@@ -53,7 +52,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, message: '', type: 'warning' as 'success' | 'error' | 'warning' });
 
-  // Collage
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState<'collage' | 'preview'>('collage');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -65,7 +63,9 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   const [cropAspect, setCropAspect] = useState<number>(3 / 4);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
-  const isLocked = status === 'Menunggu Asmen' || status === 'Approved';
+  // Gembok dimatikan paksa agar selalu bisa diedit
+  const isLocked = false; 
+
   const showAlert = (message: string, type: 'success' | 'error' | 'warning' = 'warning') => {
     setAlertConfig({ isOpen: true, message, type });
     if (type === 'success') {
@@ -83,7 +83,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
     setReportCode(`ELIT-${dateCode}-${shiftCode}-${randomStr}`);
   };
 
-  // MENGAMBIL DATA PEGAWAI SECARA DINAMIS (DENGAN PROTEKSI)
   useEffect(() => {
     const fetchPersonnelData = async () => {
       try {
@@ -98,7 +97,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
           const iassData = data.filter((p: any) => p.instansi === 'OS - IASS' || p.instansi === 'IASS').map((p: any) => p.namaLengkap);
           const ntiData = data.filter((p: any) => p.instansi === 'OM - NTI' || p.instansi === 'NTI').map((p: any) => p.namaLengkap);
           
-          // Hanya ganti data jika array dari database tidak kosong
           if (apindoData.length > 0) setApindoList(apindoData);
           if (iassData.length > 0) setIassList(iassData);
           if (ntiData.length > 0) setNtiList(ntiData);
@@ -111,17 +109,23 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   }, []);
 
   useEffect(() => {
-    if (currentShift === 'PAGI') { setJamMulaiShift('07:00'); setJamSelesaiShift('19:00'); } 
-    else { setJamMulaiShift('19:00'); setJamSelesaiShift('07:00'); }
-  }, [currentShift]);
+    if (!initialData) {
+      if (currentShift === 'PAGI') { setJamMulaiShift('07:00'); setJamSelesaiShift('19:00'); } 
+      else { setJamMulaiShift('19:00'); setJamSelesaiShift('07:00'); }
+    }
+  }, [currentShift, initialData]);
 
   useEffect(() => {
     if (initialData) {
       setStatus(initialData.status || 'Draft');
-      if (initialData.reportCode) setReportCode(initialData.reportCode);
-      if (initialData.dinas) setCurrentShift(initialData.dinas);
-      const parts = initialData.tanggal.split(' ');
-      if (parts.length === 3) { setHari(parts[0]); setBulan(parts[1]); setTahun(parts[2]); }
+      setReportCode(initialData.reportCode || initialData.kodeLaporan || '');
+      setCurrentShift(initialData.dinas || currentShift);
+      
+      if (initialData.tanggal) {
+        const parts = initialData.tanggal.split(' ');
+        if (parts.length === 3) { setHari(parts[0]); setBulan(parts[1]); setTahun(parts[2]); }
+      }
+      
       if (initialData.jamMulaiShift) setJamMulaiShift(initialData.jamMulaiShift);
       if (initialData.jamSelesaiShift) setJamSelesaiShift(initialData.jamSelesaiShift);
 
@@ -134,7 +138,7 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
       
       if (initialData.kondisiFasilitas?.length > 0) {
         setFasilitas(initialData.kondisiFasilitas);
-        if (initialData.catatan) setCatatanFasilitas(initialData.catatan);
+        setCatatanFasilitas(initialData.catatan || '');
         setActiveTab('fasilitas');
       } else if (initialData.kegiatan?.length > 0) {
         const parsed = initialData.kegiatan.map((k: any) => {
@@ -145,27 +149,73 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
           const ket = raw.match(/Keterangan:\s*([\s\S]*)$/i)?.[1] || '-';
           const jm = k.jamMulai?.replace(' WIB', '').split('.') || ['07', '00'];
           const js = k.jamSelesai?.replace(' WIB', '').split('.') || ['07', '30'];
-          return { laporanDari: lDari, jamMulaiH: jm[0] || '07', jamMulaiM: jm[1] || '00', uraian: urText, tindakLanjut: tLanjut, jamSelesaiH: js[0] || '07', jamSelesaiM: js[1] || '30', hasilKondisi: k.hasilKondisi || '-', keterangan: ket, dokumentasi: k.dokumentasi || [] };
+          return { 
+            laporanDari: lDari, 
+            jamMulaiH: jm[0] || '07', 
+            jamMulaiM: jm[1] || '00', 
+            uraian: urText, 
+            tindakLanjut: tLanjut, 
+            jamSelesaiH: js[0] || '07', 
+            jamSelesaiM: js[1] || '30', 
+            hasilKondisi: k.hasilKondisi || '-', 
+            keterangan: ket, 
+            dokumentasi: k.dokumentasi || [] 
+          };
         });
         setKegiatan(parsed);
-        const allDocs = initialData.kegiatan.reduce((acc: string[], k: any) => acc.concat(k.dokumentasi || []), []);
+        
+        // PENGAMAN FOTO SUPER KETAT
+        let allDocs: string[] = [];
+        
+        // Cek foto di dalam array kegiatan
+        if (Array.isArray(initialData.kegiatan)) {
+          initialData.kegiatan.forEach((k: any) => {
+            if (Array.isArray(k.dokumentasi)) {
+              allDocs.push(...k.dokumentasi);
+            } else if (typeof k.dokumentasi === 'string' && k.dokumentasi.trim() !== '') {
+              allDocs.push(k.dokumentasi);
+            }
+          });
+        }
+        
+        // Jika tidak ketemu, cek foto di root dokumen (jaga-jaga beda schema)
+        if (allDocs.length === 0 && Array.isArray(initialData.dokumentasi)) {
+          allDocs.push(...initialData.dokumentasi);
+        }
+
+        const validDocs = allDocs.filter(d => typeof d === 'string' && d.trim() !== '');
+        
         const loadedSlots: string[][] = [[], [], [], []];
-        allDocs.forEach((doc: string, i: number) => { if (i < 4) loadedSlots[i] = [doc]; });
+        const loadedCollages: string[] = ['', '', '', ''];
+        
+        validDocs.forEach((doc: string, i: number) => { 
+          if (i < 4) {
+            loadedSlots[i] = [doc];
+            loadedCollages[i] = doc;
+          }
+        });
+        
         setSlotImages(loadedSlots);
+        setFinalCollages(loadedCollages);
       }
     }
   }, [initialData]);
 
   const handleTabChange = (tab: string) => {
     if (tab === 'kegiatan' || tab === 'fasilitas') {
-      if (!reportCode) { showAlert('Harap Generate Report Code terlebih dahulu!', 'warning'); return; }
-      if (!apindo.some(p => p.nama) && !osIass.some(p => p.nama) && !omNti.some(p => p.nama)) { showAlert('Harap isi minimal 1 nama personil!', 'warning'); return; }
+      if (!initialData && !reportCode) { 
+        showAlert('Harap Generate Report Code terlebih dahulu!', 'warning'); 
+        return; 
+      }
+      if (!apindo.some(p => p.nama) && !osIass.some(p => p.nama) && !omNti.some(p => p.nama)) { 
+        showAlert('Harap isi minimal 1 nama personil!', 'warning'); 
+        return; 
+      }
     }
     setActiveTab(tab);
   };
 
   const renderBottomAction = () => {
-    if (isLocked) return null;
     if (activeTab === 'umum') {
       return (
         <div className="pt-6 mt-6 border-t border-slate-200 w-full pb-8">
@@ -313,7 +363,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
   return (
     <div className="w-full min-h-screen bg-white text-slate-800 font-sans flex flex-col">
       
-      {/* Aler dan Modals */}
       {alertConfig.isOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl relative flex flex-col text-center border border-slate-200">
@@ -411,7 +460,6 @@ export default function ReportForm({ shift, initialData, onBack }: ReportFormPro
             </div>
           )}
 
-          {/* TAB 2 DENGAN TOMBOL FOTO KHUSUS */}
           {activeTab === 'kegiatan' && <FormLogbook kegiatan={kegiatan} setKegiatan={setKegiatan} isLocked={isLocked} onOpenPhotoModal={() => { setShowModal(true); setModalStep('collage'); }} />}
           
           {activeTab === 'fasilitas' && <FormFasilitas fasilitas={fasilitas} setFasilitas={setFasilitas} catatanFasilitas={catatanFasilitas} setCatatanFasilitas={setCatatanFasilitas} isLocked={isLocked} initialData={initialData} showAlert={showAlert} />}
