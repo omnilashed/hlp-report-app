@@ -32,6 +32,7 @@ build/
 **/dist/
 **/dist-ssr/
 **/build/
+frontend/public/ocr/
 
 # Logs
 logs/
