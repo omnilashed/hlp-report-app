@@ -3,12 +3,12 @@ import { forwardRef } from 'react';
 const formatNamaPendek = (nama: string) => {
   if (!nama) return '';
   const lower = nama.toLowerCase();
-  
+
   if (lower.includes('fachreza')) return 'M. Fachreza';
   if (lower.includes('luthfianda')) return 'Luthfianda M.';
   if (lower.includes('desi dwi')) return 'Desi D.';
   if (lower.includes('mahdi')) return 'Mahdi A.';
-  if (lower.includes('dennis')) return 'Dennis S..';
+  if (lower.includes('dennis')) return 'Dennis S.';
   if (lower.includes('adelia')) return 'Adelia P.';
   if (lower.includes('eka yuliani')) return 'Eka Yuliani S.';
   if (lower.includes('maulana hady')) return 'Maulana Hady C. S.';
@@ -17,7 +17,7 @@ const formatNamaPendek = (nama: string) => {
 
   const kata = nama.trim().split(' ');
   if (kata.length === 1) return kata[0].charAt(0).toUpperCase() + kata[0].slice(1).toLowerCase();
-  
+
   const first = kata[0].charAt(0).toUpperCase() + kata[0].slice(1).toLowerCase();
   const lastInitials = kata.slice(1).map(k => k.charAt(0).toUpperCase() + '.').join(' ');
   return `${first} ${lastInitials}`;
@@ -36,7 +36,7 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
   const iass = data.personil?.omIassNti?.slice(0, 4) || [];
   const nti = data.personil?.omIassNti?.slice(4) || [];
   const maxRows = Math.max(apindo.length, iass.length, nti.length, 4);
-  
+
   const personnelRows = Array.from({ length: maxRows }).map((_, i) => ({
     apindo: formatNamaPendek(apindo[i]?.nama || ''),
     iass: formatNamaPendek(iass[i]?.nama || ''),
@@ -44,33 +44,46 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
   }));
 
   const isPagi = data.dinas === 'PAGI';
-  const themeBg = isPagi ? '#FFFF00' : '#5B9BD5'; 
-  const themeText = '#000000'; 
+  const themeBg = isPagi ? '#FFFF00' : '#5B9BD5';
+  const themeText = '#000000';
 
-  const cellStyle = { 
-    border: '1px solid black', 
-    padding: '4px 5px', 
-    verticalAlign: 'top' as any, 
-    color: '#000000', 
+  const cellStyle: React.CSSProperties = {
+    border: '1px solid black',
+    padding: '8px 8px',
+    verticalAlign: 'top',
+    color: '#000000',
     backgroundColor: '#FFFFFF',
-    fontSize: '10px', 
-    lineHeight: '1.25',
-    wordWrap: 'break-word' as any
+    fontSize: '10px',
+    lineHeight: '1.4',
+    wordWrap: 'break-word'
   };
-  
-  const headerStyle = { 
-    border: '1px solid black', 
-    padding: '4px', 
-    backgroundColor: themeBg, 
-    color: themeText, 
-    fontWeight: 'bold', 
-    textAlign: 'center' as any, 
-    verticalAlign: 'middle' as any,
-    fontSize: '10px'
+
+  const headerStyle: React.CSSProperties = {
+    border: '1px solid black',
+    padding: '8px 6px',
+    backgroundColor: themeBg,
+    color: themeText,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    verticalAlign: 'middle',
+    fontSize: '10px',
+    lineHeight: '1.3'
   };
-  
-  const signatureHeaderStyle = { ...headerStyle, backgroundColor: '#e5e7eb', padding: '3px', fontSize: '9px' };
-  const signatureCellStyle = { ...cellStyle, padding: '3px 4px', fontSize: '9px', verticalAlign: 'middle' as any };
+
+  const signatureHeaderStyle: React.CSSProperties = {
+    ...headerStyle,
+    backgroundColor: '#e5e7eb',
+    padding: '6px 4px',
+    fontSize: '9.5px'
+  };
+
+  const signatureCellStyle: React.CSSProperties = {
+    ...cellStyle,
+    padding: '7px 6px',
+    fontSize: '9.5px',
+    lineHeight: '1.35',
+    verticalAlign: 'middle'
+  };
 
   const allPhotos: string[] = [];
   data.kegiatan?.forEach((k: any) => {
@@ -80,10 +93,42 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
   });
 
   return (
-    <div ref={ref} id="print-area" style={{ width: '100%', minWidth: '1024px', padding: '10px 20px', fontFamily: 'Arial, sans-serif', backgroundColor: '#ffffff', color: '#000000', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-      
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: '8px' }}>
-        <table border={1} style={{ borderCollapse: 'collapse', fontSize: '10px', width: '38%', fontWeight: 'bold', textAlign: 'center' }}>
+    <div
+      ref={ref}
+      id="print-area"
+      style={{
+        width: '1060px',
+        maxWidth: '1060px',
+        margin: '0 auto',
+        padding: '12px 16px',
+        fontFamily: 'Arial, sans-serif',
+        backgroundColor: '#ffffff',
+        color: '#000000',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box'
+      }}
+    >
+      {/* Header Info Shift & Logo HLP */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          width: '100%',
+          marginBottom: '10px'
+        }}
+      >
+        <table
+          border={1}
+          style={{
+            borderCollapse: 'collapse',
+            fontSize: '10px',
+            width: '38%',
+            fontWeight: 'bold',
+            textAlign: 'center'
+          }}
+        >
           <thead>
             <tr>
               <th style={headerStyle}>FUNGSI</th>
@@ -93,31 +138,54 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
           </thead>
           <tbody>
             <tr>
-              <td style={{ ...cellStyle, verticalAlign: 'middle', padding: '4px' }}>ELECTRONIC & IT FACILITY</td>
-              <td style={{ ...cellStyle, verticalAlign: 'middle', padding: '4px' }}>{data.dinas}</td>
-              <td style={{ ...cellStyle, verticalAlign: 'middle', padding: '4px' }}>{formatTanggalTitleCase(data.tanggal)}</td>
+              <td style={{ ...cellStyle, verticalAlign: 'middle', padding: '6px', textAlign: 'center' }}>
+                ELECTRONIC & IT FACILITY
+              </td>
+              <td style={{ ...cellStyle, verticalAlign: 'middle', padding: '6px', textAlign: 'center' }}>
+                {data.dinas}
+              </td>
+              <td style={{ ...cellStyle, verticalAlign: 'middle', padding: '6px', textAlign: 'center' }}>
+                {formatTanggalTitleCase(data.tanggal)}
+              </td>
             </tr>
           </tbody>
         </table>
-        
-        <img src="/hlp.png" alt="HLP Logo" style={{ height: '65px', objectFit: 'contain' }} />
+
+        <img src="/hlp.png" alt="HLP Logo" style={{ height: '55px', objectFit: 'contain' }} />
       </div>
 
-      <h1 style={{ textAlign: 'center', fontSize: '14px', fontWeight: 'bold', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
+      <h1
+        style={{
+          textAlign: 'center',
+          fontSize: '17px',
+          fontWeight: 'bold',
+          margin: '4px 0 14px 0',
+          textTransform: 'uppercase'
+        }}
+      >
         LAPORAN KEGIATAN HARIAN (LOG BOOK)
       </h1>
 
-      <table id="print-table" border={1} style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+      {/* Tabel Utama Kegiatan */}
+      <table
+        id="print-table"
+        border={1}
+        style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14px', tableLayout: 'fixed' }}
+      >
         <thead>
           <tr>
-            <th style={{...headerStyle, width: '4%'}}>NO</th>
-            <th style={{...headerStyle, width: '12%'}}>LAPORAN DARI</th>
-            <th style={{...headerStyle, width: '9%'}}>JAM</th>
-            <th style={{...headerStyle, width: '35%'}}>URAIAN KEGIATAN /<br/>PERMASALAHAN</th>
-            <th style={{...headerStyle, width: '14%'}}>TINDAK LANJUT</th>
-            <th style={{...headerStyle, width: '8%'}}>JAM SELESAI</th>
-            <th style={{...headerStyle, width: '8%'}}>HASIL /<br/>KONDISI</th>
-            <th style={{...headerStyle, width: '10%'}}>KETERANGAN</th>
+            <th style={{ ...headerStyle, width: '4%' }}>NO</th>
+            <th style={{ ...headerStyle, width: '10%' }}>LAPORAN DARI</th>
+            <th style={{ ...headerStyle, width: '9%' }}>JAM</th>
+            <th style={{ ...headerStyle, width: '37%' }}>
+              URAIAN KEGIATAN /<br />PERMASALAHAN
+            </th>
+            <th style={{ ...headerStyle, width: '14%' }}>TINDAK LANJUT</th>
+            <th style={{ ...headerStyle, width: '8%' }}>JAM SELESAI</th>
+            <th style={{ ...headerStyle, width: '8%' }}>
+              HASIL /<br />KONDISI
+            </th>
+            <th style={{ ...headerStyle, width: '10%' }}>KETERANGAN</th>
           </tr>
         </thead>
         <tbody>
@@ -132,73 +200,187 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
             const jamSelesaiClean = k.jamSelesai?.replace(/ WIB/gi, '').trim();
 
             return (
-              <tr key={i} className="break-inside-avoid" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-                <td style={{...cellStyle, textAlign: 'center'}}>{i + 1}</td>
-                <td style={{...cellStyle, textAlign: 'center'}}>{lDari}</td>
-                <td style={{...cellStyle, textAlign: 'center'}}>{jamMulaiClean} WIB</td>
-                <td style={{...cellStyle, whiteSpace: 'pre-wrap'}}><span style={{fontWeight:'bold'}}>Kegiatan:</span><br/>{urText.trim()}</td>
-                <td style={{...cellStyle, whiteSpace: 'pre-wrap', textAlign: 'center'}}>{tLanjut.trim() === '-' ? '' : tLanjut.trim()}</td>
-                <td style={{...cellStyle, textAlign: 'center'}}>{jamSelesaiClean} WIB</td>
-                <td style={{...cellStyle, textAlign: 'center'}}>{k.hasilKondisi === '-' ? '' : k.hasilKondisi}</td>
-                <td style={{...cellStyle, whiteSpace: 'pre-wrap', textAlign: 'center'}}>{ket.trim() === '-' ? '' : ket.trim()}</td>
+              <tr
+                key={i}
+                className="break-inside-avoid"
+                style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+              >
+                <td style={{ ...cellStyle, width: '4%', textAlign: 'center' }}>{i + 1}</td>
+                <td style={{ ...cellStyle, width: '10%', textAlign: 'center', fontWeight: 'bold' }}>{lDari}</td>
+                <td style={{ ...cellStyle, width: '9%', textAlign: 'center' }}>{jamMulaiClean} WIB</td>
+                <td style={{ ...cellStyle, width: '37%', whiteSpace: 'pre-wrap' }}>
+                  <span style={{ fontWeight: 'bold' }}>Kegiatan:</span>
+                  <br />
+                  {urText.trim()}
+                </td>
+                <td style={{ ...cellStyle, width: '14%', whiteSpace: 'pre-wrap', textAlign: 'center' }}>
+                  {tLanjut.trim() === '-' ? '' : tLanjut.trim()}
+                </td>
+                <td style={{ ...cellStyle, width: '8%', textAlign: 'center' }}>{jamSelesaiClean} WIB</td>
+                <td style={{ ...cellStyle, width: '8%', textAlign: 'center' }}>
+                  {k.hasilKondisi === '-' ? '' : k.hasilKondisi}
+                </td>
+                <td style={{ ...cellStyle, width: '10%', whiteSpace: 'pre-wrap', textAlign: 'center' }}>
+                  {ket.trim() === '-' ? '' : ket.trim()}
+                </td>
               </tr>
             );
           })}
         </tbody>
       </table>
 
-      <div className="break-inside-avoid" style={{ pageBreakInside: 'avoid', breakInside: 'avoid', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <table id="print-table-signature" border={1} style={{ borderCollapse: 'collapse', width: '55%', textAlign: 'center' }}>
+      {/* Blok Tanda Tangan (Personil & Mengetahui) */}
+      <div
+        className="break-inside-avoid"
+        style={{
+          pageBreakInside: 'avoid',
+          breakInside: 'avoid',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'stretch',
+          width: '100%',
+          marginTop: '10px'
+        }}
+      >
+        {/* Tabel Paraf Personil */}
+        <table
+          id="print-table-signature"
+          border={1}
+          style={{ borderCollapse: 'collapse', width: '58%', textAlign: 'center' }}
+        >
           <thead>
             <tr>
-              <th style={{...signatureHeaderStyle, width: '6%'}}>NO</th>
-              <th style={{...signatureHeaderStyle, width: '25%'}}>APINDO</th>
-              <th style={{...signatureHeaderStyle, width: '7%'}}>PARAF</th>
-              <th style={{...signatureHeaderStyle, width: '25%'}}>OS - IASS</th>
-              <th style={{...signatureHeaderStyle, width: '7%'}}>PARAF</th>
-              <th style={{...signatureHeaderStyle, width: '25%'}}>OM - NTI</th>
-              <th style={{...signatureHeaderStyle, width: '7%'}}>PARAF</th>
+              <th style={{ ...signatureHeaderStyle, width: '6%' }}>NO</th>
+              <th style={{ ...signatureHeaderStyle, width: '25%' }}>APINDO</th>
+              <th style={{ ...signatureHeaderStyle, width: '7%' }}>PARAF</th>
+              <th style={{ ...signatureHeaderStyle, width: '25%' }}>OS - IASS</th>
+              <th style={{ ...signatureHeaderStyle, width: '7%' }}>PARAF</th>
+              <th style={{ ...signatureHeaderStyle, width: '25%' }}>OM - NTI</th>
+              <th style={{ ...signatureHeaderStyle, width: '7%' }}>PARAF</th>
             </tr>
           </thead>
           <tbody>
             {personnelRows.map((row, i) => (
-              <tr key={i}>
-                <td style={{...signatureCellStyle, textAlign: 'center'}}>{i + 1}</td>
-                <td style={{...signatureCellStyle, textAlign: 'left'}}>{row.apindo}</td>
-                <td style={{...signatureCellStyle}}></td>
-                <td style={{...signatureCellStyle, textAlign: 'left'}}>{row.iass}</td>
-                <td style={{...signatureCellStyle}}></td>
-                <td style={{...signatureCellStyle, textAlign: 'left'}}>{row.nti}</td>
-                <td style={{...signatureCellStyle}}></td>
+              <tr key={i} style={{ height: '28px' }}>
+                <td style={{ ...signatureCellStyle, textAlign: 'center', width: '6%' }}>{i + 1}</td>
+                <td style={{ ...signatureCellStyle, textAlign: 'left', width: '25%' }}>{row.apindo}</td>
+                <td style={{ ...signatureCellStyle, width: '7%' }}></td>
+                <td style={{ ...signatureCellStyle, textAlign: 'left', width: '25%' }}>{row.iass}</td>
+                <td style={{ ...signatureCellStyle, width: '7%' }}></td>
+                <td style={{ ...signatureCellStyle, textAlign: 'left', width: '25%' }}>{row.nti}</td>
+                <td style={{ ...signatureCellStyle, width: '7%' }}></td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div style={{ width: '35%', textAlign: 'center', fontSize: '10px' }}>
-          <p style={{ margin: '0 0 5px 0' }}>Mengetahui,</p>
-          <p style={{ margin: '0 0 30px 0' }}>ASST. MANAGER OF FACILITY MAINTENANCE</p>
-          <p style={{ margin: 0, fontWeight: 'bold' }}>AEP MASHUM NURZAMAN</p>
+        {/* Kolom Mengetahui */}
+        <div
+          style={{
+            width: '38%',
+            textAlign: 'center',
+            fontSize: '11px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            padding: '6px 12px'
+          }}
+        >
+          <div>
+            <p style={{ margin: '0 0 4px 0', fontSize: '11px' }}>Mengetahui,</p>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '11px' }}>
+              ASST. MANAGER OF FACILITY MAINTENANCE
+            </p>
+          </div>
+          <div style={{ height: '48px' }}></div>
+          <div>
+            <p style={{ margin: 0, fontWeight: 'bold', textDecoration: 'underline', fontSize: '11px' }}>
+              AEP MASHUM NURZAMAN
+            </p>
+          </div>
         </div>
       </div>
 
+      {/* Halaman Dokumentasi Foto (Jika Ada) */}
       {allPhotos.length > 0 && (
-        <div className="page-break" style={{ pageBreakBefore: 'always', paddingTop: '20px', width: '100%', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '0px', right: '0px' }}>
-            <img src="/hlp.png" alt="HLP Logo" style={{ height: '75px', objectFit: 'contain' }} />
+        <div
+          className="page-break-before"
+          style={{
+            pageBreakBefore: 'always',
+            breakBefore: 'page',
+            paddingTop: '16px',
+            width: '100%',
+            position: 'relative'
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '14px',
+              borderBottom: '2px solid #000',
+              paddingBottom: '8px'
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  margin: 0
+                }}
+              >
+                DOKUMENTASI LAPORAN KEGIATAN HARIAN (LOG BOOK)
+              </h2>
+              <p style={{ margin: '3px 0 0 0', fontSize: '10px', color: '#475569' }}>
+                Electronic & IT Facility • Shift {data.dinas} • {formatTanggalTitleCase(data.tanggal)}
+              </p>
+            </div>
+            <img src="/hlp.png" alt="HLP Logo" style={{ height: '45px', objectFit: 'contain' }} />
           </div>
-          <h2 style={{ textAlign: 'center', fontSize: '14px', fontWeight: 'bold', marginTop: '40px', marginBottom: '20px', textTransform: 'uppercase' }}>
-            DOKUMENTASI LAPORAN KEGIATAN HARIAN (LOG BOOK)
-          </h2>
-          
-          <div style={{ display: 'flex', border: '1px solid black', width: '100%', height: '350px' }}>
-            {allPhotos.slice(0, 4).map((foto: string, fIdx: number) => (
-              <div key={fIdx} style={{ width: '25%', height: '100%', borderRight: fIdx < 3 ? '1px solid black' : 'none', overflow: 'hidden' }}>
-                <img src={foto} alt="Dokumentasi" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: allPhotos.length === 1 ? '1fr' : '1fr 1fr',
+              gap: '14px',
+              width: '100%'
+            }}
+          >
+            {allPhotos.map((foto: string, fIdx: number) => (
+              <div
+                key={fIdx}
+                className="break-inside-avoid"
+                style={{
+                  pageBreakInside: 'avoid',
+                  breakInside: 'avoid',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '8px',
+                  backgroundColor: '#f8fafc',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: allPhotos.length <= 2 ? '420px' : '260px'
+                }}
+              >
+                <img
+                  src={foto}
+                  alt={`Dokumentasi ${fIdx + 1}`}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    borderRadius: '4px'
+                  }}
+                />
+                <div style={{ fontSize: '9.5px', color: '#64748b', marginTop: '6px' }}>
+                  Dokumentasi #{fIdx + 1}
+                </div>
               </div>
-            ))}
-            {Array.from({ length: Math.max(0, 4 - allPhotos.slice(0,4).length) }).map((_, fIdx) => (
-               <div key={`empty-${fIdx}`} style={{ width: '25%', height: '100%', borderRight: (allPhotos.slice(0,4).length + fIdx) < 3 ? '1px solid black' : 'none', backgroundColor: '#f3f4f6' }}></div>
             ))}
           </div>
         </div>
@@ -209,5 +391,5 @@ export const PrintTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }
 
 export const PrintFasilitasTemplate = forwardRef<HTMLDivElement, { data: any }>(({ data }, ref) => {
   if (!data) return null;
-  return (<div ref={ref}></div>);
+  return <div ref={ref}></div>;
 });

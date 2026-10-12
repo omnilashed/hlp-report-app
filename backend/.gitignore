@@ -1,13 +1,21 @@
 # Dependency
 node_modules/
 
-# Environment Variables
+# Environment Variables (Sensitive)
 .env
+.env.*
+!.env.example
 
-# WhatsApp Bot Session
+# WhatsApp Bot Session & Cache (Sensitive)
 .wwebjs_auth/
 .wwebjs_cache/
 
+# Database Dumps & Backups
+*.csv
+*.dump
+*.bak
+
 # Build & Logs
 dist/
+*.log
 npm-debug.log*

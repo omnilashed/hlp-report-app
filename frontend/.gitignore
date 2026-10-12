@@ -23,5 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Rahasia
+# Environment Variables (Sensitive)
 .env
+.env.*
+!.env.example

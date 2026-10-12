@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment Variables (Sensitive Secrets - DO NOT COMMIT)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# WhatsApp Web.js Session & Browser Auth Data (Sensitive Session - DO NOT COMMIT)
+.wwebjs_auth/
+.wwebjs_cache/
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+
+# Database Dumps, Exports & Local Data Backups (Sensitive Operational Data - DO NOT COMMIT)
+hlp_logbook.reports.csv
+test.equipment.json
+*.csv
+*.sqlite
+*.db
+*.dump
+*.bak
+
+# Build Outputs
+dist/
+dist-ssr/
+build/
+**/dist/
+**/dist-ssr/
+**/build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# SSL / Private Keys
+*.pem
+*.key
+*.crt
+*.p12
+
+# Editor & OS Files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.local

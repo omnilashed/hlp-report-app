@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'RAHASIA_ELIT_KSO_123';
+const SECRET_KEY = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_env';
 
 export interface AuthRequest extends Request {
   user?: any;

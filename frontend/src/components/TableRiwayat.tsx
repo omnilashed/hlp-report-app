@@ -18,7 +18,7 @@ interface TableRiwayatProps {
 export default function TableRiwayat({ 
   reports, 
   isLoading, 
-  canInput, 
+  canInput: _canInput, 
   viewReportDetail, 
   editReport, 
   deleteReport, 
@@ -29,7 +29,7 @@ export default function TableRiwayat({
   userName,
   rollbackReport // Tambahan
 }: TableRiwayatProps) {
-  const [activeTab, setActiveTab] = useState<'Logbook' | 'Fasilitas'>('Logbook');
+  const [activeTab, setActiveTab] = useState<'Semua' | 'Logbook' | 'Fasilitas'>('Semua');
   
   const [dateFilter, setDateFilter] = useState('Semua'); 
   const [customDate, setCustomDate] = useState('');
@@ -48,10 +48,40 @@ export default function TableRiwayat({
     return new Date(dateString);
   };
 
+  const getDraftRemainingText = (report: any) => {
+    if (report.status !== 'Draft') return null;
+    const expTime = report.draftExpiresAt
+      ? new Date(report.draftExpiresAt).getTime()
+      : new Date(report.draftSavedAt || report.updatedAt || report.createdAt || Date.now()).getTime() + 24 * 60 * 60 * 1000;
+    const diff = expTime - Date.now();
+    if (diff <= 0) return 'Expired';
+    const hrs = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hrs}j ${mins}m`;
+  };
+
+  const getReportTypeLabel = (report: any) => {
+    if (report.status === 'Draft') return 'Draft Laporan Terpadu (Logbook & Fasilitas)';
+    const hasKegiatan = Array.isArray(report.kegiatan) && report.kegiatan.length > 0;
+    const hasFasilitas = Array.isArray(report.kondisiFasilitas) && report.kondisiFasilitas.length > 0;
+    if (hasKegiatan && hasFasilitas) return 'Laporan Harian (Logbook & Fasilitas)';
+    if (hasFasilitas) return 'Pengecekan Fasilitas';
+    return 'Log Book Harian';
+  };
+
   const filteredReports = reports.filter((report: any) => {
-    const isFasilitasTab = activeTab === 'Fasilitas';
-    const isFasilitasReport = report.kondisiFasilitas && report.kondisiFasilitas.length > 0;
-    if (isFasilitasTab !== !!isFasilitasReport) return false;
+    if (report.status === 'Draft') {
+      const rem = getDraftRemainingText(report);
+      if (rem === 'Expired') return false;
+    }
+
+    if (activeTab === 'Fasilitas') {
+      const isFasilitasReport = report.kondisiFasilitas && report.kondisiFasilitas.length > 0;
+      if (!isFasilitasReport) return false;
+    } else if (activeTab === 'Logbook') {
+      const isLogbookReport = report.kegiatan && report.kegiatan.length > 0;
+      if (!isLogbookReport) return false;
+    }
 
     let passDate = true;
     if (dateFilter !== 'Semua') {
@@ -82,24 +112,25 @@ export default function TableRiwayat({
 
     if (searchTerm.trim() !== '') {
       const lowerSearch = searchTerm.toLowerCase();
-      
-      if (isFasilitasTab) {
-        const matchFasilitas = report.kondisiFasilitas?.some((f: any) => 
-          f.namaPeralatan?.toLowerCase().includes(lowerSearch) ||
-          f.keteranganRusak?.toLowerCase().includes(lowerSearch) ||
-          f.lokasi?.toLowerCase().includes(lowerSearch)
-        );
-        const matchCatatan = report.catatan?.toLowerCase().includes(lowerSearch);
-        if (!matchFasilitas && !matchCatatan) return false;
-      } else {
-        const matchKegiatan = report.kegiatan?.some((k: any) => 
-          k.uraian?.toLowerCase().includes(lowerSearch) ||
-          k.tindakLanjut?.toLowerCase().includes(lowerSearch) ||
-          k.keterangan?.toLowerCase().includes(lowerSearch) ||
-          k.hasilKondisi?.toLowerCase().includes(lowerSearch) ||
-          k.laporanDari?.toLowerCase().includes(lowerSearch)
-        );
-        if (!matchKegiatan) return false;
+      const matchFasilitas = report.kondisiFasilitas?.some((f: any) => 
+        f.namaPeralatan?.toLowerCase().includes(lowerSearch) ||
+        f.keteranganRusak?.toLowerCase().includes(lowerSearch) ||
+        f.lokasi?.toLowerCase().includes(lowerSearch)
+      );
+      const matchCatatan = report.catatan?.toLowerCase().includes(lowerSearch);
+      const matchKegiatan = report.kegiatan?.some((k: any) => 
+        k.uraian?.toLowerCase().includes(lowerSearch) ||
+        k.tindakLanjut?.toLowerCase().includes(lowerSearch) ||
+        k.keterangan?.toLowerCase().includes(lowerSearch) ||
+        k.hasilKondisi?.toLowerCase().includes(lowerSearch) ||
+        k.laporanDari?.toLowerCase().includes(lowerSearch)
+      );
+      const matchCode = report.reportCode?.toLowerCase().includes(lowerSearch);
+      const matchTanggal = report.tanggal?.toLowerCase().includes(lowerSearch);
+      const matchDinas = report.dinas?.toLowerCase().includes(lowerSearch);
+
+      if (!matchFasilitas && !matchCatatan && !matchKegiatan && !matchCode && !matchTanggal && !matchDinas) {
+        return false;
       }
     }
 
@@ -118,22 +149,30 @@ export default function TableRiwayat({
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 p-4 md:px-6 border-b border-white/50 bg-white/20">
         
-        <div className="flex gap-3 overflow-x-auto scrollbar-hide w-full md:w-auto">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide w-full md:w-auto">
+          <button
+            onClick={() => { setActiveTab('Semua'); setSearchTerm(''); }}
+            className={`px-5 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+              activeTab === 'Semua' ? 'bg-blue-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
+            }`}
+          >
+            📋 Semua Laporan (Logbook & Fasilitas)
+          </button>
           <button
             onClick={() => { setActiveTab('Logbook'); setSearchTerm(''); }}
-            className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+            className={`px-4 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'Logbook' ? 'bg-blue-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
             }`}
           >
-            Logbook Harian
+            Logbook
           </button>
           <button
             onClick={() => { setActiveTab('Fasilitas'); setSearchTerm(''); }}
-            className={`px-6 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
+            className={`px-4 py-2.5 rounded-full font-bold text-xs sm:text-sm transition-all whitespace-nowrap ${
               activeTab === 'Fasilitas' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white/70 text-slate-500 hover:bg-white'
             }`}
           >
-            Pengecekan Fasilitas
+            Fasilitas
           </button>
         </div>
 
@@ -199,7 +238,14 @@ export default function TableRiwayat({
             ) : filteredReports.length > 0 ? (
               filteredReports.map((report, index) => {
                 const status = report.status || 'Draft';
-                const statusClass = status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : status === 'Revisi' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-200 text-slate-700 border-slate-300';
+                const draftRem = getDraftRemainingText(report);
+                const statusClass = status === 'Approved'
+                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                  : status === 'Revisi'
+                  ? 'bg-rose-100 text-rose-700 border-rose-200'
+                  : status === 'Draft'
+                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                  : 'bg-slate-200 text-slate-700 border-slate-300';
                 
                 // LOGIKA HAK AKSES
                 const isPrivileged = userRole === 'SUPERVISOR' || userRole === 'ADMIN';
@@ -216,8 +262,19 @@ export default function TableRiwayat({
                 return (
                   <tr key={report._id || index} className="border-b border-white/30 hover:bg-white/40 transition-colors">
                     <td className="p-4 text-center font-medium text-slate-500">{(currentPage - 1) * 10 + index + 1}</td>
-                    <td className="p-4 font-bold text-slate-800">{activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</td>
-                    <td className="p-4 text-center"><span className={`px-3 py-1 rounded-lg text-xs font-bold border ${statusClass}`}>{status}</span></td>
+                    <td className="p-4 font-bold text-slate-800">
+                      {getReportTypeLabel(report)}
+                    </td>
+                    <td className="p-4 text-center">
+                      <div className="inline-flex flex-col items-center gap-1">
+                        <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${statusClass}`}>
+                          {status === 'Draft' ? '📝 Draft Sementara' : status}
+                        </span>
+                        {status === 'Draft' && draftRem && (
+                          <span className="text-[10px] font-bold text-amber-700">⏳ Hilang dlm {draftRem}</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-4 font-medium text-slate-600">{report.tanggal} <span className="ml-2 bg-blue-100/50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200/50">Shift {report.dinas}</span></td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-2">
@@ -275,7 +332,7 @@ export default function TableRiwayat({
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[10px] font-bold text-slate-500 bg-white/50 px-2.5 py-1 rounded-lg border border-white">#{(currentPage - 1) * 10 + index + 1} • {report.tanggal}</span>
-                    <h3 className="font-bold text-slate-800 mt-3 text-base">{activeTab === 'Fasilitas' ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</h3>
+                    <h3 className="font-bold text-slate-800 mt-3 text-base">{getReportTypeLabel(report)}</h3>
                     <p className="text-sm text-blue-600 font-bold mt-1">Shift {report.dinas}</p>
                   </div>
                   <span className={`px-2 py-1 rounded-md text-[10px] font-bold border ${statusClass}`}>{status}</span>

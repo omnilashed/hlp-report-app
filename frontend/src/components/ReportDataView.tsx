@@ -2,11 +2,17 @@ import { useState } from 'react';
 
 interface ReportDataViewProps {
   selectedReport: any;
-  isFasilitasOnly: boolean;
+  isFasilitasOnly?: boolean;
 }
 
 export default function ReportDataView({ selectedReport, isFasilitasOnly }: ReportDataViewProps) {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const hasKegiatan = Array.isArray(selectedReport?.kegiatan) && selectedReport.kegiatan.length > 0;
+  const hasFasilitas = Array.isArray(selectedReport?.kondisiFasilitas) && selectedReport.kondisiFasilitas.length > 0;
+  const [viewTab, setViewTab] = useState<'logbook' | 'fasilitas'>(
+    isFasilitasOnly || (!hasKegiatan && hasFasilitas) ? 'fasilitas' : 'logbook'
+  );
 
   return (
     <>
@@ -24,41 +30,133 @@ export default function ReportDataView({ selectedReport, isFasilitasOnly }: Repo
         </div>
       )}
 
-      <div className="bg-white/60 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-6">
-        <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest">Tim Bertugas</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="bg-white/50 p-4 rounded-2xl border border-white">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">APINDO</span>
-            <div className="space-y-1">
-              {selectedReport.personil?.apindo?.map((p: any, i: number) => (
-                <div key={i} className="text-xs font-bold text-slate-700">{p.nama || '-'}</div>
-              )) || <div className="text-xs text-slate-400">-</div>}
-            </div>
-          </div>
-          <div className="bg-white/50 p-4 rounded-2xl border border-white">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">OS - IASS</span>
-            <div className="space-y-1">
-              {selectedReport.personil?.omIassNti?.slice(0, 4).map((p: any, i: number) => (
-                <div key={i} className="text-xs font-bold text-slate-700">{p.nama || '-'}</div>
-              )) || <div className="text-xs text-slate-400">-</div>}
-            </div>
-          </div>
-          <div className="bg-white/50 p-4 rounded-2xl border border-white">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">OM - NTI</span>
-            <div className="space-y-1">
-              {selectedReport.personil?.omIassNti?.slice(4).map((p: any, i: number) => (
-                <div key={i} className="text-xs font-bold text-slate-700">{p.nama || '-'}</div>
-              )) || <div className="text-xs text-slate-400">-</div>}
-            </div>
-          </div>
+      {/* Navigasi Tab Detail Laporan: Log Book & Pengecekan Fasilitas */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white/70 backdrop-blur-xl p-3 rounded-2xl border border-white/80 shadow-sm">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setViewTab('logbook')}
+            className={`px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 ${
+              viewTab === 'logbook'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                : 'bg-white/80 text-slate-500 hover:text-slate-800 hover:bg-white'
+            }`}
+          >
+            <span>📋 Log Book / Kegiatan</span>
+            {hasKegiatan && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${viewTab === 'logbook' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {selectedReport.kegiatan.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setViewTab('fasilitas')}
+            className={`px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 ${
+              viewTab === 'fasilitas'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
+                : 'bg-white/80 text-slate-500 hover:text-slate-800 hover:bg-white'
+            }`}
+          >
+            <span>🛠️ Pengecekan Fasilitas</span>
+            {hasFasilitas && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] ${viewTab === 'fasilitas' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {selectedReport.kondisiFasilitas.length}
+              </span>
+            )}
+          </button>
         </div>
+        <span className="text-xs font-bold text-slate-400 px-3 hidden sm:inline">
+          {viewTab === 'logbook' ? 'Menampilkan Logbook Kegiatan Harian' : 'Menampilkan Status Pengecekan Fasilitas'}
+        </span>
       </div>
 
-      {isFasilitasOnly ? (
+      <div className="bg-white/60 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest">Tim Bertugas</h2>
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">H: Hadir</span>
+            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">DL: Dinas Luar</span>
+            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">C: Cuti</span>
+            <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold">S: Sakit</span>
+            <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold">T: Tidak Masuk</span>
+            <span className="px-2 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200 font-bold">TK: Urusan Keluarga</span>
+          </div>
+        </div>
+        {(() => {
+          const getAbsensiBadge = (code?: string) => {
+            const c = (code || 'H').toUpperCase();
+            const map: Record<string, { label: string; cls: string }> = {
+              'H': { label: 'Hadir', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+              'DL': { label: 'Dinas Luar', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+              'C': { label: 'Cuti', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+              'S': { label: 'Sakit', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+              'T': { label: 'Tidak Masuk', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+              'TK': { label: 'Tidak Masuk Urusan Keluarga', cls: 'bg-orange-50 text-orange-700 border-orange-200' }
+            };
+            const meta = map[c] || map['H'];
+            return (
+              <span title={meta.label} className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold border shrink-0 ${meta.cls}`}>
+                {c}
+              </span>
+            );
+          };
+
+          const apindoList = selectedReport.personil?.apindo || [];
+          const osIassList = (Array.isArray(selectedReport.personil?.osIass) && selectedReport.personil.osIass.length > 0)
+            ? selectedReport.personil.osIass
+            : (selectedReport.personil?.omIassNti?.slice(0, 4) || []);
+          const omNtiList = (Array.isArray(selectedReport.personil?.omNti) && selectedReport.personil.omNti.length > 0)
+            ? selectedReport.personil.omNti
+            : (selectedReport.personil?.omIassNti?.slice(4) || []);
+
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="bg-white/50 p-4 rounded-2xl border border-white">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">APINDO</span>
+                <div className="space-y-1.5">
+                  {apindoList.length > 0 ? apindoList.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
+                      <span className="truncate">{p.nama || '-'}</span>
+                      {p.nama && getAbsensiBadge(p.absensi)}
+                    </div>
+                  )) : <div className="text-xs text-slate-400">-</div>}
+                </div>
+              </div>
+              <div className="bg-white/50 p-4 rounded-2xl border border-white">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">OS - IASS</span>
+                <div className="space-y-1.5">
+                  {osIassList.length > 0 ? osIassList.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
+                      <span className="truncate">{p.nama || '-'}</span>
+                      {p.nama && getAbsensiBadge(p.absensi)}
+                    </div>
+                  )) : <div className="text-xs text-slate-400">-</div>}
+                </div>
+              </div>
+              <div className="bg-white/50 p-4 rounded-2xl border border-white">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">OM - NTI</span>
+                <div className="space-y-1.5">
+                  {omNtiList.length > 0 ? omNtiList.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
+                      <span className="truncate">{p.nama || '-'}</span>
+                      {p.nama && getAbsensiBadge(p.absensi)}
+                    </div>
+                  )) : <div className="text-xs text-slate-400">-</div>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {viewTab === 'fasilitas' ? (
         <div className="space-y-4">
           <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest px-2">Daftar Kondisi Fasilitas</h2>
           <div className="bg-white/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm">
             {(() => {
+               if (!selectedReport.kondisiFasilitas || selectedReport.kondisiFasilitas.length === 0) {
+                 return <div className="text-slate-400 text-sm font-medium py-4 text-center">Belum ada data kondisi fasilitas untuk laporan ini.</div>;
+               }
+
                const grouped = selectedReport.kondisiFasilitas.reduce((acc: any, curr: any) => {
                  if (!acc[curr.namaPeralatan]) acc[curr.namaPeralatan] = { total: 0, normal: 0, rusak: 0, listRusak: [] };
                  acc[curr.namaPeralatan].total += 1;
@@ -101,71 +199,77 @@ export default function ReportDataView({ selectedReport, isFasilitasOnly }: Repo
       ) : (
         <div className="space-y-4">
           <h2 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest px-2">Daftar Kegiatan & Aduan</h2>
-          {selectedReport.kegiatan?.map((keg: any, index: number) => {
-            const raw = keg.uraian || '';
-            const lDari = raw.match(/Laporan Dari:\s*(.*?)(?=\n|$)/i)?.[1] || '-';
-            const urText = raw.match(/Uraian:\s*([\s\S]*?)(?=\n*Tindak Lanjut:|$)/i)?.[1] || raw;
-            const tLanjut = raw.match(/Tindak Lanjut:\s*([\s\S]*?)(?=\n*Keterangan:|$)/i)?.[1] || '-';
-            const ket = raw.match(/Keterangan:\s*([\s\S]*)$/i)?.[1] || '-';
-            const jamMulaiClean = keg.jamMulai?.replace(/ WIB/gi, '').trim();
-            const jamSelesaiClean = keg.jamSelesai?.replace(/ WIB/gi, '').trim();
+          {!selectedReport.kegiatan || selectedReport.kegiatan.length === 0 ? (
+            <div className="bg-white/70 backdrop-blur-xl p-8 rounded-3xl border border-white/80 shadow-sm text-slate-400 text-sm font-medium text-center">
+              Belum ada data kegiatan logbook untuk laporan ini.
+            </div>
+          ) : (
+            selectedReport.kegiatan.map((keg: any, index: number) => {
+              const raw = keg.uraian || '';
+              const lDari = raw.match(/Laporan Dari:\s*(.*?)(?=\n|$)/i)?.[1] || '-';
+              const urText = raw.match(/Uraian:\s*([\s\S]*?)(?=\n*Tindak Lanjut:|$)/i)?.[1] || raw;
+              const tLanjut = raw.match(/Tindak Lanjut:\s*([\s\S]*?)(?=\n*Keterangan:|$)/i)?.[1] || '-';
+              const ket = raw.match(/Keterangan:\s*([\s\S]*)$/i)?.[1] || '-';
+              const jamMulaiClean = keg.jamMulai?.replace(/ WIB/gi, '').trim();
+              const jamSelesaiClean = keg.jamSelesai?.replace(/ WIB/gi, '').trim();
 
-            return (
-              <div key={index} className="bg-white/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
-                  <span className="px-3 py-1.5 bg-blue-50 text-blue-600 font-extrabold text-xs rounded-xl border border-blue-100">
-                    {jamMulaiClean} - {jamSelesaiClean} WIB
-                  </span>
-                  <span className="text-xs font-bold text-slate-500">
-                    Laporan Dari: <strong className="text-slate-800">{lDari}</strong>
-                  </span>
-                </div>
+              return (
+                <div key={index} className="bg-white/70 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-white/80 shadow-sm space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                    <span className="px-3 py-1.5 bg-blue-50 text-blue-600 font-extrabold text-xs rounded-xl border border-blue-100">
+                      {jamMulaiClean} - {jamSelesaiClean} WIB
+                    </span>
+                    <span className="text-xs font-bold text-slate-500">
+                      Laporan Dari: <strong className="text-slate-800">{lDari}</strong>
+                    </span>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Progress / Uraian</label>
-                      <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{urText}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Progress / Uraian</label>
+                        <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{urText}</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tindak Lanjut</label>
+                        <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{tLanjut}</p>
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Tindak Lanjut</label>
-                      <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{tLanjut}</p>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Keterangan Tambahan</label>
+                        <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{ket}</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Kondisi Akhir</label>
+                        <p className="text-slate-800 font-bold bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{keg.hasilKondisi || '-'}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Keterangan Tambahan</label>
-                      <p className="text-slate-800 font-medium whitespace-pre-line bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{ket}</p>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Kondisi Akhir</label>
-                      <p className="text-slate-800 font-bold bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">{keg.hasilKondisi || '-'}</p>
-                    </div>
-                  </div>
-                </div>
 
-                {keg.dokumentasi && keg.dokumentasi.length > 0 && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Dokumentasi Foto (Klik untuk memperbesar)</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      {keg.dokumentasi.map((foto: string, fIdx: number) => (
-                        <div 
-                          key={fIdx} 
-                          onClick={() => setPreviewImage(foto)}
-                          className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer shadow-sm hover:shadow-md transition-all"
-                        >
-                          <img src={foto} alt="Dokumentasi" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <svg className="w-6 h-6 drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                  {keg.dokumentasi && keg.dokumentasi.length > 0 && (
+                    <div className="pt-4 border-t border-slate-100">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Dokumentasi Foto (Klik untuk memperbesar)</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {keg.dokumentasi.map((foto: string, fIdx: number) => (
+                          <div 
+                            key={fIdx} 
+                            onClick={() => setPreviewImage(foto)}
+                            className="group relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 cursor-pointer shadow-sm hover:shadow-md transition-all"
+                          >
+                            <img src={foto} alt="Dokumentasi" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                              <svg className="w-6 h-6 drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

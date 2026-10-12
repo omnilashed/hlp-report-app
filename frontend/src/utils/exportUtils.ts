@@ -2,47 +2,385 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import html2pdf from 'html2pdf.js';
 
-export const getPercentage = (selectedReport: any, names: string[]) => {
-  let total = 0, normal = 0;
-  selectedReport.kondisiFasilitas?.forEach((f: any) => { if (names.some(n => f.namaFasilitas.includes(n))) { total += f.totalUnit; normal += f.normal; } });
-  if (total === 0) return '100%';
-  const pct = (normal / total) * 100;
-  return pct % 1 === 0 ? pct + '%' : pct.toFixed(2).replace('.', ',') + '%';
+export const formatTanggalWithDay = (tanggalStr?: string): string => {
+  if (!tanggalStr) return '';
+  if (/^[A-Za-z]+,/.test(tanggalStr)) return tanggalStr;
+  const parts = tanggalStr.trim().split(/\s+/);
+  if (parts.length === 3) {
+    const dNum = parseInt(parts[0], 10);
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const mIdx = months.findIndex(m => m.toLowerCase() === parts[1].toLowerCase());
+    const yNum = parseInt(parts[2], 10);
+    if (!isNaN(dNum) && mIdx !== -1 && !isNaN(yNum)) {
+      const d = new Date(yNum, mIdx, dNum);
+      const daysIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      return `${daysIndo[d.getDay()]}, ${parts[0]} ${parts[1]} ${parts[2]}`;
+    }
+  }
+  return tanggalStr;
 };
 
-export const generateReportText = (selectedReport: any, isHtml: boolean = false) => {
+export const getFasilitasGrouped = (kondisiFasilitas: any[]): Array<{
+  nama: string;
+  total: number;
+  normal: number;
+  rusak: number;
+  unitLabel: string;
+  keteranganNormal?: string;
+  keteranganRusak?: string;
+}> => {
+  if (!Array.isArray(kondisiFasilitas) || kondisiFasilitas.length === 0) return [];
+
+  // Jika item pertama sudah memiliki `totalUnit` (format summary)
+  if (kondisiFasilitas[0] && typeof kondisiFasilitas[0].totalUnit === 'number') {
+    return kondisiFasilitas.map(f => {
+      const nama = f.namaFasilitas || f.namaPeralatan || '';
+      const unitLabel = nama.toUpperCase().includes('CRASHBELL') ? 'System' : 'Unit';
+      return {
+        nama,
+        total: f.totalUnit,
+        normal: f.normal ?? (f.totalUnit - (f.rusak || 0)),
+        rusak: f.rusak || 0,
+        unitLabel,
+        keteranganNormal: f.keteranganNormal || (nama === 'SIGN RUANG TUNGGU' ? 'sign ruang tunggu dan sign jalan khusus difabel' : undefined),
+        keteranganRusak: f.keteranganRusak || ''
+      };
+    });
+  }
+
+  // Jika berupa array peralatan individual
+  const grouped: Record<string, { total: number; normal: number; rusak: number; unitLabel: string; listRusak: string[] }> = {};
+  kondisiFasilitas.forEach(item => {
+    const rawName = item.namaPeralatan || item.namaFasilitas || 'PERALATAN';
+    const nama = rawName.toUpperCase();
+    const unitLabel = nama.includes('CRASHBELL') ? 'System' : 'Unit';
+    if (!grouped[nama]) {
+      grouped[nama] = { total: 0, normal: 0, rusak: 0, unitLabel, listRusak: [] };
+    }
+    grouped[nama].total += 1;
+    if (item.kondisi === 'Rusak') {
+      grouped[nama].rusak += 1;
+      const desc = item.keteranganRusak ? `${item.lokasi || ''} (${item.keteranganRusak})`.trim() : (item.lokasi || '');
+      if (desc) grouped[nama].listRusak.push(desc);
+    } else {
+      grouped[nama].normal += 1;
+    }
+  });
+
+  return Object.entries(grouped).map(([nama, val]) => ({
+    nama,
+    total: val.total,
+    normal: val.normal,
+    rusak: val.rusak,
+    unitLabel: val.unitLabel,
+    keteranganNormal: nama === 'SIGN RUANG TUNGGU' ? 'sign ruang tunggu dan sign jalan khusus difabel' : undefined,
+    keteranganRusak: val.listRusak.join(', ')
+  }));
+};
+
+export const getPercentage = (selectedReport: any, keywords: string[]): string => {
+  const groups = getFasilitasGrouped(selectedReport?.kondisiFasilitas || []);
+  let total = 0;
+  let normal = 0;
+
+  groups.forEach(g => {
+    const match = keywords.some(kw => g.nama.toUpperCase().includes(kw.toUpperCase()));
+    if (match) {
+      total += g.total;
+      normal += g.normal;
+    }
+  });
+
+  if (total === 0) return '100%';
+  const pct = (normal / total) * 100;
+  return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(2).replace('.', ',')}%`;
+};
+
+export const generateReportText = (selectedReport: any, isHtml: boolean = false): string => {
   if (!selectedReport) return '';
   const br = isHtml ? '<br>' : '\n';
-  let text = `Assalamu'alaikum. Wr. Wb${br}Bersama ini dilaporkan, kegiatan ELECTRONIC & IT FACILITY – KSO HLP pada hari ini ${selectedReport.tanggal} sebagai berikut :${br}${br}ELECTRONIC & IT FACILITY – KSO HLP${br}A. PERSONIL DINAS ${selectedReport.dinas} - ELIT${br}APINDO${br}`;
+  const bold = (s: string) => isHtml ? `<strong>${s}</strong>` : `*${s}*`;
+
+  const formattedTanggal = formatTanggalWithDay(selectedReport.tanggal);
+  const dinas = String(selectedReport.dinas || 'PAGI').toUpperCase();
+
+  let text = `Assalamu'alaikum. Wr. Wb${br}${br}`;
+  text += `Bersama ini dilaporkan, kegiatan ${bold('ELECTRONIC & IT FACILITY – KSO HLP')} pada hari ini ${bold(formattedTanggal + ' sebagai berikut:')}${br}${br}`;
+  text += `${bold('ELECTRONIC & IT FACILITY – KSO HLP')}${br}${br}`;
+  text += `${bold(`A. PERSONIL DINAS ${dinas} - ELIT`)}${br}${br}`;
+
+  // APINDO
+  text += `${bold('APINDO')}${br}`;
   const apindo = selectedReport.personil?.apindo || [];
-  if (apindo.length > 0) apindo.forEach((p: any) => { if(p.nama) text += `👷🏻 ${p.nama}${br}`; }); else text += `👷🏻 -${br}`;
-  text += `OM IASS - NTI${br}`;
-  const om = selectedReport.personil?.omIassNti || [];
-  if (om.length > 0) om.forEach((p: any) => { if(p.nama) text += `👷🏻 ${p.nama}${br}`; }); else text += `👷🏻 -${br}`;
-  if (selectedReport.kegiatan?.length > 0) {
-    text += `${br}B. LAPORAN KEGIATAN DINAS ${selectedReport.dinas} - ELIT${br}`;
-    selectedReport.kegiatan.forEach((k: any) => { text += `Jam ${k.jamMulai.replace(' WIB', '')} - ${k.jamSelesai}${br}- ${k.uraian?.split('\n\nUraian: ')[1]?.split('\nTindak Lanjut:')[0].replace(/^- /, '') || ''}${br}`; });
-  }
-  if (selectedReport.kondisiFasilitas?.length > 0) {
-    text += `${br}C. PERFORMANCE FASILITAS - ELIT${br}- ✅ X-RAY : ${getPercentage(selectedReport, ['X-RAY'])}${br}- ✅ WTMD : ${getPercentage(selectedReport, ['WTMD'])}${br}- ✅ HHMD : ${getPercentage(selectedReport, ['HHMD'])}${br}- ✅ ETD : ${getPercentage(selectedReport, ['ETD'])}${br}- ✅ CCTV : ${getPercentage(selectedReport, ['CCTV'])}${br}- ✅ Access Control : ${getPercentage(selectedReport, ['ACCESS CONTROL'])}${br}- ✅ Fire Alarm : ${getPercentage(selectedReport, ['FAS'])}${br}- ✅ Radio Communication : ${getPercentage(selectedReport, ['VHF'])}${br}- ✅ FIDS : ${getPercentage(selectedReport, ['FIDS'])}${br}- ✅ Public Addressing : ${getPercentage(selectedReport, ['PAS'])}${br}- ✅ Data Network : ${getPercentage(selectedReport, ['SWITCH', 'RADIOLINK', 'ACCESS POINT'])}${br}${br}D. LAPORAN KONDISI FASILITAS – ELIT${br}`;
-    selectedReport.kondisiFasilitas.forEach((f: any) => {
-      const unitLabel = f.namaFasilitas === 'CRASHBELL' ? 'System' : 'Unit';
-      text += `${f.namaFasilitas} (${f.totalUnit} ${unitLabel})${br}- ✅ Normal : ${f.normal} ${unitLabel} ${f.namaFasilitas === 'SIGN RUANG TUNGGU' && f.keteranganRusak ? '(' + f.keteranganRusak + ')' : ''}${br}`;
-      text += f.rusak > 0 ? `- ❌ Rusak : ${f.rusak} ${unitLabel} ${f.namaFasilitas !== 'SIGN RUANG TUNGGU' && f.keteranganRusak ? '(' + f.keteranganRusak + ')' : ''}${br}` : `- ❌ Rusak : -${br}`;
+  if (apindo.length > 0 && apindo.some((p: any) => p?.nama)) {
+    apindo.forEach((p: any) => {
+      if (p?.nama) {
+        text += `👷🏻 ${p.nama}${p.keterangan ? ` (${p.keterangan})` : ''}${br}`;
+      }
     });
-    const catatanList = selectedReport.kondisiFasilitas.filter((f: any) => f.rusak > 0 && f.keteranganRusak && f.namaFasilitas !== 'SIGN RUANG TUNGGU');
-    if (catatanList.length > 0) {
-      text += `${br}"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"${br}Catatan :${br}`;
-      catatanList.forEach((f: any, i: number) => { text += `${i+1}. ${f.namaFasilitas} : ${f.keteranganRusak}${br}`; });
-      text += `${br}`;
-    } else text += `${br}"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"${br}${br}`;
+  } else {
+    text += `👷🏻 -${br}`;
   }
+  text += `${br}`;
+
+  // OM IASS - NTI
+  text += `${bold('OM IASS - NTI')}${br}`;
+  let omList = selectedReport.personil?.omIassNti || [];
+  if (omList.length === 0) {
+    omList = [...(selectedReport.personil?.osIass || []), ...(selectedReport.personil?.omNti || [])];
+  }
+  if (omList.length > 0 && omList.some((p: any) => p?.nama)) {
+    omList.forEach((p: any) => {
+      if (p?.nama) {
+        text += `👷🏻 ${p.nama}${p.keterangan ? ` (${p.keterangan})` : ''}${br}`;
+      }
+    });
+  } else {
+    text += `👷🏻 -${br}`;
+  }
+
+  // B. KEGIATAN
+  if (Array.isArray(selectedReport.kegiatan) && selectedReport.kegiatan.length > 0) {
+    text += `${br}${bold(`B. LAPORAN KEGIATAN DINAS ${dinas} - ELIT`)}${br}${br}`;
+    selectedReport.kegiatan.forEach((k: any) => {
+      const jamMulaiClean = String(k.jamMulai || '07:00').replace(/ WIB/gi, '').trim();
+      const jamSelesaiClean = String(k.jamSelesai || '19:00').replace(/ WIB/gi, '').trim();
+      let uraianText = k.uraian || '';
+      // Ekstrak teks uraian jika formatnya Laporan Dari / Uraian / Tindak Lanjut
+      if (uraianText.includes('Uraian:')) {
+        uraianText = uraianText.split('Uraian:')[1]?.split('Tindak Lanjut:')[0]?.trim() || uraianText;
+      }
+      uraianText = uraianText.replace(/^Kegiatan\s*:\s*/i, '').trim();
+
+      text += `Jam ${jamMulaiClean} - ${jamSelesaiClean} WIB${br}`;
+      const lines = uraianText.split('\n').map((l: string) => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        lines.forEach((line: string) => {
+          const cleanLine = line.replace(/^- /, '');
+          text += `- ${cleanLine}${br}`;
+        });
+      } else {
+        text += `- ${uraianText}${br}`;
+      }
+      text += `${br}`;
+    });
+  }
+
+  // C. PERFORMANCE & D. KONDISI FASILITAS
+  const groups = getFasilitasGrouped(selectedReport.kondisiFasilitas || []);
+  if (groups.length > 0) {
+    text += `${bold('C. PERFORMANCE FASILITAS - ELIT')}${br}`;
+    text += `- ✅ X-RAY : ${getPercentage(selectedReport, ['X-RAY'])}${br}`;
+    text += `- ✅ WTMD : ${getPercentage(selectedReport, ['WTMD'])}${br}`;
+    text += `- ✅ HHMD : ${getPercentage(selectedReport, ['HHMD'])}${br}`;
+    text += `- ✅ ETD : ${getPercentage(selectedReport, ['ETD'])}${br}`;
+    text += `- ✅ CCTV : ${getPercentage(selectedReport, ['CCTV'])}${br}`;
+    text += `- ✅ Access Control : ${getPercentage(selectedReport, ['ACCESS CONTROL'])}${br}`;
+    text += `- ✅ Fire Alarm : ${getPercentage(selectedReport, ['FAS', 'FIRE ALARM', 'DETECTOR FAS', 'MCFA'])}${br}`;
+    text += `- ✅ Radio Communication : ${getPercentage(selectedReport, ['VHF', 'HT', 'RIG', 'RADIO'])}${br}`;
+    text += `- ✅ FIDS : ${getPercentage(selectedReport, ['FIDS'])}${br}`;
+    text += `- ✅ Public Addressing : ${getPercentage(selectedReport, ['PAS', 'SPEAKER', 'AMPLIFIER', 'MIXER'])}${br}`;
+    text += `- ✅ Data Network : ${getPercentage(selectedReport, ['SWITCH', 'RADIOLINK', 'ACCESS POINT'])}${br}${br}`;
+
+    text += `${bold('D. LAPORAN KONDISI FASILITAS – ELIT')}${br}${br}`;
+    groups.forEach(g => {
+      text += `${bold(`${g.nama.toUpperCase()} (${g.total} ${g.unitLabel})`)}${br}`;
+      const normalNote = g.keteranganNormal ? ` (${g.keteranganNormal})` : '';
+      text += `* ✅ Normal : ${g.normal} ${g.unitLabel}${normalNote}${br}`;
+      if (g.rusak > 0) {
+        const rusakNote = g.keteranganRusak ? ` (${g.keteranganRusak})` : '';
+        text += `* ❌ Rusak : ${g.rusak} ${g.unitLabel}${rusakNote}${br}${br}`;
+      } else {
+        text += `* ❌ Rusak : -${br}${br}`;
+      }
+    });
+
+    text += `${bold('"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"')}${br}${br}`;
+
+    // Catatan
+    const catatanItems: string[] = [];
+    if (selectedReport.catatan && selectedReport.catatan.trim()) {
+      const userNotes = selectedReport.catatan.split('\n').map((n: string) => n.trim()).filter(Boolean);
+      userNotes.forEach((n: string) => {
+        catatanItems.push(n.replace(/^[0-9]+[.)]\s*/, ''));
+      });
+    }
+
+    groups.filter(g => g.rusak > 0 && g.keteranganRusak && g.nama !== 'SIGN RUANG TUNGGU').forEach(g => {
+      const autoNote = `${g.nama} : terdapat kerusakan (${g.keteranganRusak}) sebanyak ${g.rusak} ${g.unitLabel}`;
+      if (!catatanItems.some(c => c.toLowerCase().includes(g.nama.toLowerCase()))) {
+        catatanItems.push(autoNote);
+      }
+    });
+
+    if (catatanItems.length > 0) {
+      text += `Catatan :${br}`;
+      catatanItems.forEach((note, idx) => {
+        text += `${idx + 1}. ${note}${br}`;
+      });
+      text += `${br}`;
+    }
+  }
+
   text += `Demikian disampaikan.${br}Haturnuhun`;
   return text;
 };
 
+// Ambil semua foto lampiran kegiatan / kolase dari laporan
+export const extractReportPhotos = (selectedReport: any): string[] => {
+  const photos: string[] = [];
+  if (Array.isArray(selectedReport?.finalCollages)) {
+    selectedReport.finalCollages.forEach((img: any) => {
+      if (typeof img === 'string' && img.trim().length > 50 && !photos.includes(img)) {
+        photos.push(img);
+      }
+    });
+  }
+  if (Array.isArray(selectedReport?.kegiatan)) {
+    selectedReport.kegiatan.forEach((k: any) => {
+      if (Array.isArray(k.dokumentasi)) {
+        k.dokumentasi.forEach((doc: any) => {
+          if (typeof doc === 'string' && doc.trim().length > 50 && !photos.includes(doc)) {
+            photos.push(doc);
+          }
+        });
+      }
+    });
+  }
+  if (Array.isArray(selectedReport?.dokumentasi)) {
+    selectedReport.dokumentasi.forEach((doc: any) => {
+      if (typeof doc === 'string' && doc.trim().length > 50 && !photos.includes(doc)) {
+        photos.push(doc);
+      }
+    });
+  }
+  return photos;
+};
+
+// Konversi data string base64 / data URL ke File binary
+export const base64ToFile = (dataUrl: string, filename: string): File => {
+  const parts = dataUrl.split(',');
+  const mime = parts[0]?.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const bstr = atob(parts[1] || parts[0]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+};
+
+// Fitur Direct WhatsApp beserta Foto Terlampir (Mobile & Web)
+// CATATAN: WhatsApp TIDAK mendukung text + files secara bersamaan di Web Share API.
+// Jika keduanya dikirim, WhatsApp hanya menampilkan text saja dan mengabaikan files.
+// Solusi: LANGKAH 1 — Kirim foto terlebih dahulu (files-only share → WhatsApp menerima foto).
+//         LANGKAH 2 — Salin teks ke clipboard & buka WhatsApp link dengan teks agar user tinggal paste/kirim.
+export const shareToWhatsAppWithPhotos = async (selectedReport: any) => {
+  const text = generateReportText(selectedReport, false);
+  const photos = extractReportPhotos(selectedReport);
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // ============================================================================
+  // MOBILE: Gunakan Web Share API dengan 2 langkah terpisah (foto dulu, lalu teks)
+  // ============================================================================
+  if (isMobile && typeof navigator !== 'undefined' && navigator.share) {
+    // --- LANGKAH 1: Kirim FOTO ke WhatsApp via Web Share API (files-only, tanpa text) ---
+    if (photos.length > 0) {
+      try {
+        const files: File[] = [];
+        photos.forEach((base64Str, i) => {
+          try {
+            const ext = base64Str.includes('png') ? 'png' : 'jpg';
+            files.push(base64ToFile(base64Str, `Dokumentasi_Kegiatan_${i + 1}.${ext}`));
+          } catch (e) { console.warn(`Gagal konversi foto ${i + 1}:`, e); }
+        });
+
+        if (files.length > 0 && navigator.canShare && navigator.canShare({ files })) {
+          // Salin teks ke clipboard SEBELUM share foto, sebagai cadangan jika user ingin paste langsung
+          try { await navigator.clipboard.writeText(text); } catch (e) {}
+
+          // Langkah 1: Buka share foto ke WhatsApp
+          await navigator.share({ files });
+
+          // Langkah 2: Setelah foto selesai dikirim (user kembali ke browser),
+          // LANGSUNG otomatis direct ke WhatsApp dengan format salinan teks laporan tanpa pop-up tanya lagi
+          const encodedText = encodeURIComponent(text);
+          setTimeout(() => {
+            window.location.href = `whatsapp://send?text=${encodedText}`;
+          }, 350);
+          return;
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.warn('Web Share API (files-only) gagal:', err);
+      }
+    }
+
+    // Jika TIDAK ada foto, langsung direct TEKS saja ke WhatsApp
+    try {
+      const encodedText = encodeURIComponent(text);
+      window.location.href = `whatsapp://send?text=${encodedText}`;
+      return;
+    } catch (err: any) {
+      console.warn('Direct WhatsApp teks gagal:', err);
+    }
+  }
+
+  // ============================================================================
+  // DESKTOP / Fallback: Salin teks + unduh foto + buka WhatsApp Web
+  // ============================================================================
+
+  // 1. Salin teks laporan ke Clipboard
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {}
+
+  // 2. Unduh semua foto otomatis ke perangkat agar user dapat melampirkan manual
+  if (photos.length > 0) {
+    // Gunakan interval kecil antar-download agar browser tidak memblokir
+    for (let i = 0; i < photos.length; i++) {
+      try {
+        const base64Str = photos[i];
+        const ext = base64Str.includes('png') ? 'png' : 'jpg';
+        const link = document.createElement('a');
+        link.href = base64Str;
+        link.download = `Foto_Kegiatan_${i + 1}.${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        // Jeda 300ms antar file agar browser tidak memblokir download beruntun
+        if (i < photos.length - 1) {
+          await new Promise(r => setTimeout(r, 300));
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 3. Buka WhatsApp Web/Desktop dengan teks laporan
+  const encodedText = encodeURIComponent(text);
+  const waUrl = isMobile
+    ? `whatsapp://send?text=${encodedText}`
+    : `https://web.whatsapp.com/send?text=${encodedText}`;
+
+  window.open(waUrl, '_blank');
+
+  if (photos.length > 0) {
+    alert(
+      `✅ Format teks WA berhasil disalin ke clipboard & WhatsApp terbuka!\n\n` +
+      `📸 Sebanyak ${photos.length} foto lampiran kegiatan telah otomatis diunduh.\n\n` +
+      `Langkah selanjutnya:\n` +
+      `1. Pilih kontak/grup tujuan di WhatsApp\n` +
+      `2. Kirim teks laporan (sudah terisi otomatis)\n` +
+      `3. Lampirkan foto yang sudah diunduh (📎 Attach → Photos)`
+    );
+  } else {
+    alert('✅ Format teks WA berhasil disalin ke clipboard & WhatsApp terbuka!');
+  }
+};
+
 export const copyToWhatsApp = (selectedReport: any) => {
-  navigator.clipboard.writeText(generateReportText(selectedReport, false)).then(() => alert('Disalin ke clipboard!')).catch(() => alert('Gagal menyalin.'));
+  shareToWhatsAppWithPhotos(selectedReport);
 };
 
 export const exportToWord = (selectedReport: any) => {
@@ -54,7 +392,19 @@ export const exportToWord = (selectedReport: any) => {
 
 export const exportToPDF = (ref: any, nama: string, selectedReport: any) => {
   if (!selectedReport || !ref.current) return;
-  const opt = { margin: 0.2, filename: `${nama}_${selectedReport.tanggal}_${selectedReport.dinas}.pdf`, image: { type: 'jpeg' as const, quality: 1 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: 'in' as const, format: 'a4' as const, orientation: 'landscape' as const } };
+  const opt: any = {
+    margin: [8, 8, 8, 8],
+    filename: `${nama}_${selectedReport.tanggal}_${selectedReport.dinas}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+    pagebreak: {
+      mode: ['avoid-all', 'css', 'legacy'],
+      before: '.page-break-before',
+      after: '.page-break-after',
+      avoid: ['tr', '.break-inside-avoid', '.page-break-avoid']
+    }
+  };
   html2pdf().set(opt).from(ref.current).save();
 };
 

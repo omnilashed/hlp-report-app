@@ -4,6 +4,12 @@ import FasilitasForm from './components/FormFasilitas';
 import Login from './pages/Login';
 import ReportDetail from './pages/ReportDetail';
 import DataPersonel from './pages/DataPersonel';
+import DataMaster from './pages/DataMaster';
+import LaporanKerusakan from './pages/LaporanKerusakan';
+import LaporanPerbaikan from './pages/LaporanPerbaikan';
+import LaporanKondisiBulanan from './pages/LaporanKondisiBulanan';
+import LaporanStockPeralatan from './pages/LaporanStockPeralatan';
+import ManagementAbsensi from './pages/ManagementAbsensi';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import TableRiwayat from './components/TableRiwayat';
@@ -39,6 +45,12 @@ export default function App() {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [reportToReject, setReportToReject] = useState<any>(null);
+
+  // State integrasi antara Data Master <-> Laporan Kerusakan <-> Laporan Perbaikan
+  const [damageReportTargetEquipment, setDamageReportTargetEquipment] = useState<any>(null);
+  const [damageReportViewId, setDamageReportViewId] = useState<string | null>(null);
+  const [repairTargetDamageReport, setRepairTargetDamageReport] = useState<any>(null);
+  const [repairReportViewId, setRepairReportViewId] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -306,7 +318,7 @@ export default function App() {
     return false;
   };
 
-  const editReport = (report: any) => {
+  const editReport = async (report: any) => {
     if (userRole === 'GUEST' || userRole === 'ASMEN') return alert('Hak akses dibatasi.');
 
     if (userRole !== 'ADMIN' && userRole !== 'SUPERVISOR') {
@@ -319,9 +331,24 @@ export default function App() {
       return alert('🛑 AKSES DITOLAK!\n\nLaporan sudah berstatus Approved (Final). Hanya ADMIN yang bisa membongkar laporan yang sudah selesai.');
     }
 
-    setSelectedReport(report);
-    if (report.kondisiFasilitas?.length > 0 && (!report.kegiatan || report.kegiatan.length === 0)) setCurrentView('fasilitasForm');
-    else { setSelectedShift(report.dinas); setCurrentView('form'); }
+    // Ambil dokumen lengkap dari server agar foto dokumentasi, rawKegiatan, dan kondisiFasilitas tidak hilang
+    const token = localStorage.getItem('token');
+    let fullReportData = report;
+    if (report?._id) {
+      try {
+        const res = await fetch(`/api/reports/${report._id}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          cache: 'no-store'
+        });
+        if (res.ok) {
+          fullReportData = await res.json();
+        }
+      } catch (e) {}
+    }
+
+    setSelectedReport(fullReportData);
+    setSelectedShift(fullReportData.dinas || report.dinas);
+    setCurrentView('form');
   };
 
   const deleteReport = async (id: string) => {
@@ -358,6 +385,35 @@ export default function App() {
       const res = await fetch(`/api/reports/${reportShort._id}`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         const fullReport = await res.json();
+
+        // Jika laporan lama tersimpan terpisah antara Logbook & Fasilitas untuk tanggal & shift yang sama:
+        const hasNoFasilitas = !fullReport.kondisiFasilitas || fullReport.kondisiFasilitas.length === 0;
+        const hasNoKegiatan = !fullReport.kegiatan || fullReport.kegiatan.length === 0;
+        if (hasNoFasilitas || hasNoKegiatan) {
+          const companion = notifReports.find((r: any) => 
+            r._id !== fullReport._id && 
+            r.tanggal === fullReport.tanggal && 
+            r.dinas === fullReport.dinas
+          );
+          if (companion) {
+            try {
+              const compRes = await fetch(`/api/reports/${companion._id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+              if (compRes.ok) {
+                const compData = await compRes.json();
+                if (hasNoFasilitas && compData.kondisiFasilitas?.length > 0) {
+                  fullReport.kondisiFasilitas = compData.kondisiFasilitas;
+                  fullReport.catatan = fullReport.catatan || compData.catatan;
+                }
+                if (hasNoKegiatan && compData.kegiatan?.length > 0) {
+                  fullReport.kegiatan = compData.kegiatan;
+                  fullReport.slotImages = fullReport.slotImages || compData.slotImages;
+                  fullReport.finalCollages = fullReport.finalCollages || compData.finalCollages;
+                }
+              }
+            } catch (e) {}
+          }
+        }
+
         setSelectedReport(fullReport); 
         setCurrentView('detail'); 
         
@@ -453,6 +509,66 @@ export default function App() {
           )}
 
           {currentView === 'personel' && <DataPersonel userRole={userRole} />}
+          {currentView === 'absensi' && <ManagementAbsensi userRole={userRole} />}
+          {currentView === 'datamaster' && (
+            <DataMaster
+              userRole={userRole}
+              onCreateDamageReport={(eq: any) => {
+                setDamageReportTargetEquipment(eq);
+                setDamageReportViewId(null);
+                setCurrentView('laporanKerusakan');
+              }}
+              onViewDamageReportDetail={(reportId: string) => {
+                setDamageReportViewId(reportId);
+                setDamageReportTargetEquipment(null);
+                setCurrentView('laporanKerusakan');
+              }}
+              onViewRepairReportDetail={(repairId: string) => {
+                setRepairReportViewId(repairId);
+                setRepairTargetDamageReport(null);
+                setCurrentView('laporanPerbaikan');
+              }}
+            />
+          )}
+
+          {currentView === 'laporanKerusakan' && (
+            <LaporanKerusakan
+              userRole={userRole}
+              userName={userFullName || loginUsername}
+              initialEquipment={damageReportTargetEquipment}
+              initialViewReportId={damageReportViewId}
+              onClearInitial={() => {
+                setDamageReportTargetEquipment(null);
+                setDamageReportViewId(null);
+              }}
+              onNavigateToPerbaikan={(damageReport: any) => {
+                setRepairTargetDamageReport(damageReport);
+                setRepairReportViewId(null);
+                setCurrentView('laporanPerbaikan');
+              }}
+            />
+          )}
+
+          {currentView === 'laporanPerbaikan' && (
+            <LaporanPerbaikan
+              userRole={userRole}
+              userName={userFullName || loginUsername}
+              initialDamageReport={repairTargetDamageReport}
+              initialViewReportId={repairReportViewId}
+              onClearInitial={() => {
+                setRepairTargetDamageReport(null);
+                setRepairReportViewId(null);
+              }}
+            />
+          )}
+
+          {currentView === 'laporanKondisiBulanan' && (
+            <LaporanKondisiBulanan />
+          )}
+
+          {currentView === 'laporanStockPeralatan' && (
+            <LaporanStockPeralatan userRole={userRole} />
+          )}
           
           {currentView === 'form' && <ReportForm shift={selectedShift} initialData={selectedReport} onBack={() => setCurrentView('dashboard')} />}
           {currentView === 'fasilitasForm' && <FasilitasForm shift={selectedShift} initialData={selectedReport} onBack={() => setCurrentView('dashboard')} />}

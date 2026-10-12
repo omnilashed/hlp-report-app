@@ -84,7 +84,13 @@ export default function ReportDetail({
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">{isFasilitasOnly ? 'Pengecekan Fasilitas' : 'Log Book Harian'}</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
+                {(selectedReport.kegiatan?.length > 0 && selectedReport.kondisiFasilitas?.length > 0)
+                  ? 'Laporan Harian ELIT'
+                  : isFasilitasOnly
+                  ? 'Pengecekan Fasilitas'
+                  : 'Log Book Harian'}
+              </h1>
               <span className={`px-3 py-1 rounded-xl text-xs font-bold border ${statusClass}`}>{status}</span>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">{selectedReport.tanggal} • Shift {selectedReport.dinas}</p>

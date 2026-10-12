@@ -8,7 +8,9 @@ const userSchema = new mongoose.Schema({
   nik: { type: String, default: '' },
   noWA: { type: String, default: '' },
   perusahaan: { type: String, default: '' },
-  isActive: { type: Boolean, default: true }
+  isActive: { type: Boolean, default: true },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

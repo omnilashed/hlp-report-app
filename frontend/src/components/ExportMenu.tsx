@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import html2pdf from 'html2pdf.js';
 import ExcelJS from 'exceljs';
+import { shareToWhatsAppWithPhotos, generateReportText } from '../utils/exportUtils';
 
 interface ExportMenuProps {
   selectedReport: any;
@@ -24,11 +25,17 @@ export default function ExportMenu({ selectedReport, isFasilitasOnly }: ExportMe
       
       // Fix TS Error: Tambahkan `as any` agar TS tidak protes soal tipe data image
       const opt: any = {
-        margin:       0.3,
+        margin:       [8, 8, 8, 8],
         filename:     `LogBook_${selectedReport.dinas}_${selectedReport.tanggal}.pdf`,
-        image:        { type: 'jpeg', quality: 1 },
-        html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, letterRendering: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak:    {
+          mode: ['avoid-all', 'css', 'legacy'],
+          before: '.page-break-before',
+          after: '.page-break-after',
+          avoid: ['tr', '.break-inside-avoid', '.page-break-avoid']
+        }
       };
       
       await html2pdf().set(opt).from(element).save();
@@ -42,59 +49,40 @@ export default function ExportMenu({ selectedReport, isFasilitasOnly }: ExportMe
   };
 
   const exportToWord = () => {
-    let html = '';
-    if (isFasilitasOnly) {
-      const tgl = selectedReport.tanggal;
-      const dn = selectedReport.dinas;
-      const ap = selectedReport.personil?.apindo?.map((p: any) => `👷🏻 ${p.nama}`).join('<br>') || '👷🏻 -';
-      const is = selectedReport.personil?.omIassNti?.map((p: any) => `👷🏻 ${p.nama}`).join('<br>') || '👷🏻 -';
-      
-      let docContent = `
-        <div style="font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.5;">
-          <p>Assalamu'alaikum. Wr. Wb<br>Bersama ini dilaporkan, kegiatan ELECTRONIC & IT FACILITY – KSO HLP pada hari ini ${tgl} sebagai berikut :</p>
-          <p><strong>ELECTRONIC & IT FACILITY – KSO HLP</strong><br><strong>A. PERSONIL DINAS ${dn} - ELIT</strong><br>APINDO<br>${ap}<br><br>OM IASS - NTI<br>${is}</p>
-          <p><strong>B. LAPORAN KONDISI FASILITAS – ELIT</strong></p>
-      `;
-      
-      const grouped = selectedReport.kondisiFasilitas.reduce((acc: any, curr: any) => {
-        if (!acc[curr.namaPeralatan]) acc[curr.namaPeralatan] = { total: 0, normal: 0, rusak: 0, listRusak: [] };
-        acc[curr.namaPeralatan].total += 1;
-        if (curr.kondisi === 'Normal') acc[curr.namaPeralatan].normal += 1;
-        if (curr.kondisi === 'Rusak') {
-          acc[curr.namaPeralatan].rusak += 1;
-          if(curr.keteranganRusak) acc[curr.namaPeralatan].listRusak.push(`${curr.lokasi} (${curr.keteranganRusak})`);
-        }
-        return acc;
-      }, {});
-      
-      Object.entries(grouped).forEach(([nama, data]: [string, any]) => {
-        docContent += `<p style="margin-bottom: 5px;"><strong>${nama.toUpperCase()} (${data.total} Unit)</strong><br>`;
-        docContent += `- ✅ Normal : ${data.normal} Unit<br>`;
-        if (data.rusak > 0) {
-            const ketStr = data.listRusak.length > 0 ? ` (${data.listRusak.join(', ')})` : '';
-            docContent += `- ❌ Rusak : ${data.rusak} Unit${ketStr}</p>`;
-        } else {
-            docContent += `- ❌ Rusak : -</p>`;
-        }
-      });
-      
-      if (selectedReport.catatan) { docContent += `<p><strong>Catatan :</strong><br>${selectedReport.catatan.replace(/\n/g, '<br>')}</p>`; } 
-      else { docContent += `<p>"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"</p>`; }
-      docContent += `<p>Demikian disampaikan.<br>Haturnuhun</p></div>`;
-      
-      html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Laporan Fasilitas</title></head><body>${docContent}</body></html>`;
-    } else {
-      const content = document.getElementById('print-area')?.innerHTML;
-      if (!content) return;
-      html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Export HTML To Doc</title></head><body>${content}</body></html>`;
+    const reportHtml = generateReportText(selectedReport, true);
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>Laporan Harian ELIT - ${selectedReport.tanggal}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2cm;
     }
-    
+    body {
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      color: #000;
+    }
+    strong {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div>${reportHtml}</div>
+</body>
+</html>`;
+
     const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${isFasilitasOnly ? 'Fasilitas' : 'LogBook'}_${selectedReport.dinas}_${selectedReport.tanggal}.doc`;
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    link.download = `Laporan_ELIT_${selectedReport.dinas}_${selectedReport.tanggal}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     setExportOpen(false);
   };
 
@@ -256,45 +244,19 @@ export default function ExportMenu({ selectedReport, isFasilitasOnly }: ExportMe
     }
   };
 
-  const copyFormatWA = () => {
-    const tgl = selectedReport.tanggal;
-    const dn = selectedReport.dinas;
-    const ap = selectedReport.personil?.apindo?.map((p: any) => `👷🏻 ${p.nama}`).join('\n') || '👷🏻 -';
-    const is = selectedReport.personil?.omIassNti?.map((p: any) => `👷🏻 ${p.nama}`).join('\n') || '👷🏻 -';
+  const handleDirectWA = async () => {
+    setExportOpen(false);
+    await shareToWhatsAppWithPhotos(selectedReport);
+  };
 
-    let text = `Assalamu'alaikum. Wr. Wb\nBersama ini dilaporkan, kegiatan ELECTRONIC & IT FACILITY – KSO HLP pada hari ini ${tgl} sebagai berikut :\n\nELECTRONIC & IT FACILITY – KSO HLP\nA. PERSONIL DINAS ${dn} - ELIT\nAPINDO\n${ap}\n\nOM IASS - NTI\n${is}\n\n`;
-
-    if (isFasilitasOnly) {
-       text += `B. LAPORAN KONDISI FASILITAS – ELIT\n`;
-       const grouped = selectedReport.kondisiFasilitas.reduce((acc: any, curr: any) => {
-         if (!acc[curr.namaPeralatan]) acc[curr.namaPeralatan] = { total: 0, normal: 0, rusak: 0, listRusak: [] };
-         acc[curr.namaPeralatan].total += 1;
-         if (curr.kondisi === 'Normal') acc[curr.namaPeralatan].normal += 1;
-         if (curr.kondisi === 'Rusak') {
-           acc[curr.namaPeralatan].rusak += 1;
-           if(curr.keteranganRusak) acc[curr.namaPeralatan].listRusak.push(`${curr.lokasi} (${curr.keteranganRusak})`);
-         }
-         return acc;
-       }, {});
-
-       Object.entries(grouped).forEach(([nama, data]: [string, any]) => {
-         text += `${nama.toUpperCase()} (${data.total} Unit)\n- ✅ Normal : ${data.normal} Unit\n`;
-         if (data.rusak > 0) { text += `- ❌ Rusak : ${data.rusak} Unit ${data.listRusak.length > 0 ? `(${data.listRusak.join(', ')})` : ''}\n\n`; } 
-         else { text += `- ❌ Rusak : -\n\n`; }
-       });
-       text += selectedReport.catatan ? `Catatan :\n${selectedReport.catatan}\n\n` : `"FASILITAS MANDATORY ELECTRONIC & IT FACILITY DALAM KONDISI BAIK DAN NORMAL"\n\n`;
-    } else {
-        text += `B. LAPORAN KEGIATAN DINAS ${dn} - ELIT\n`;
-        selectedReport.kegiatan?.forEach((k: any) => {
-          const urText = k.uraian.replace(/Laporan Dari:[\s\S]*?Uraian:\s*/i, '').replace(/Tindak Lanjut:[\s\S]*/i, '').trim();
-          const jamMulaiClean = k.jamMulai?.replace(/ WIB/gi, '').trim();
-          const jamSelesaiClean = k.jamSelesai?.replace(/ WIB/gi, '').trim();
-          text += `Jam ${jamMulaiClean} - ${jamSelesaiClean} WIB\n- ${urText}\n\n`;
-        });
+  const handleCopyTextOnly = async () => {
+    const text = generateReportText(selectedReport, false);
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('✅ Format teks laporan WA berhasil disalin ke clipboard!\n\nAnda dapat langsung paste di WhatsApp.');
+    } catch (e) {
+      alert('Gagal menyalin teks.');
     }
-    text += `Demikian disampaikan.\nHaturnuhun`;
-    navigator.clipboard.writeText(text);
-    alert('✅ Format teks WA berhasil disalin ke clipboard!');
     setExportOpen(false);
   };
 
@@ -307,7 +269,7 @@ export default function ExportMenu({ selectedReport, isFasilitasOnly }: ExportMe
       </button>
 
       {exportOpen && (
-        <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-[110] animate-fadeIn">
+        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-[110] animate-fadeIn">
           {!isFasilitasOnly && (
             <button id="btn-download-pdf" onClick={downloadPDF} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3">
               <span className="text-base">📄</span> Download PDF File
@@ -321,9 +283,16 @@ export default function ExportMenu({ selectedReport, isFasilitasOnly }: ExportMe
               <span className="text-base">📊</span> Download Excel (.xlsx)
             </button>
           )}
-          <button onClick={copyFormatWA} className="w-full text-left px-4 py-3 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-3 border-t border-slate-50">
-            <span className="text-base">💬</span> Salin Format Teks WA
-          </button>
+          <div className="border-t border-slate-100 bg-emerald-50/30">
+            <button onClick={handleDirectWA} className="w-full text-left px-4 py-3 text-xs font-bold text-emerald-700 hover:bg-emerald-100 flex items-center gap-3">
+              <span className="text-base">📲</span>
+              <span>Direct WA + Foto Terlampir</span>
+            </button>
+            <button onClick={handleCopyTextOnly} className="w-full text-left px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-3 border-t border-emerald-100/60">
+              <span className="text-base">📋</span>
+              <span>Salin Teks WA Saja (Tanpa Foto)</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
