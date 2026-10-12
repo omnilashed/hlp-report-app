@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -7,7 +8,7 @@ import bcrypt from 'bcrypt';
 import Report from './models/Report';
 import User from './models/User';
 import Attendance from './models/Attendance';
-import { verifyToken, requireRole, AuthRequest } from './middleware/auth';
+import { verifyToken, requireRole, AuthRequest, getJwtSecret } from './middleware/auth';
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import equipmentRoutes from './routes/equipment';
@@ -55,15 +56,15 @@ process.on('SIGTERM', async () => {
 });
 
 const PORT = process.env.PORT || 5000;
-const SECRET_KEY = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_env';
-const DEFAULT_USER_PASS = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123!';
+const SECRET_KEY = getJwtSecret();
+const DEFAULT_USER_PASS = process.env.DEFAULT_USER_PASSWORD || 'Elit2026!';
 
 app.use(cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
-const ALLOWED_IPS = (process.env.ALLOWED_IPS || '172.23.5.').split(',').map(ip => ip.trim()).filter(Boolean); // Cukup awalan IP jaringannya saja
-const ALLOWED_EXACT = ['127.0.0.1', '::1']; // Izinkan akses dari komputer server lokal itu sendiri
+const ALLOWED_IPS = (process.env.ALLOWED_IPS || '172.23.5.,192.168.,10.,127.0.0.1').split(',').map(ip => ip.trim()).filter(Boolean);
+const ALLOWED_EXACT = ['127.0.0.1', '::1', '::ffff:127.0.0.1']; // Izinkan akses dari komputer server lokal itu sendiri
 
 app.use((req, res, next) => {
   // Ambil IP pengunjung dari request
@@ -387,9 +388,14 @@ app.post('/api/send-wa', verifyToken, async (req, res) => {
   }
 });
 
-mongoose.connect(process.env.MONGO_URI as string)
-  .then(() => { initDefaultUsers(); })
-  .catch((err) => console.error(err));
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hlp_logbook';
+
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log('✅ Database MongoDB berhasil terhubung!');
+    initDefaultUsers();
+  })
+  .catch((err) => console.error('❌ Gagal terhubung ke MongoDB:', err));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

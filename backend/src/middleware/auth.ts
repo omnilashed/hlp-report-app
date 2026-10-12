@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_env';
+dotenv.config();
+
+export const getJwtSecret = () => process.env.JWT_SECRET || 'RAHASIA_ELIT_KSO_123';
 
 export interface AuthRequest extends Request {
   user?: any;
@@ -13,7 +16,7 @@ export const verifyToken = (req: AuthRequest, res: Response, next: NextFunction)
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, SECRET_KEY);
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded;
     next();
   } catch (err) {
