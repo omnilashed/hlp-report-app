@@ -7,9 +7,14 @@
     "dev": "vite --host",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare:ocr": "node scripts/prepare-ocr.mjs",
+    "postinstall": "npm run prepare:ocr",
+    "predev": "npm run prepare:ocr",
+    "prebuild": "npm run prepare:ocr"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
@@ -21,6 +26,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-easy-crop": "^6.2.3",
+    "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -27,3 +27,5 @@ dist-ssr
 .env
 .env.*
 !.env.example
+# Generated local OCR runtime (npm run prepare:ocr)
+/public/ocr/

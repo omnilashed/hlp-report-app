@@ -2,12 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 import * as XLSX from 'xlsx';
-import * as pdfjsLib from 'pdfjs-dist';
-// @ts-ignore
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-
 export interface RosterEntry {
   userId?: string;
   nama: string;
@@ -36,6 +30,10 @@ export interface SignedPdfVerificationInfo {
   skippedInactive: string[];
   signatureCropUrl?: string;
   pagePreviewUrl?: string;
+  sourcePeriod?: string;
+  unreadCells?: string[];
+  unmatchedPersonnel?: string[];
+  warnings?: string[];
 }
 
 interface ManagementAbsensiProps {
@@ -370,6 +368,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
     skippedInactive: string[];
     unmatchedNames: string[];
   } | null>(null);
+  const [importProgress, setImportProgress] = useState('');
   const [signedPdfInfo, setSignedPdfInfo] = useState<SignedPdfVerificationInfo | null>(null);
   const [isSignedPreviewOpen, setIsSignedPreviewOpen] = useState<boolean>(false);
   const excelInputRef = useRef<HTMLInputElement>(null);
@@ -681,13 +680,13 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
   // Sinkronisasi otomatis ketika tab/window kembali aktif setelah admin mengubah status personil
   useEffect(() => {
     const handleWindowFocus = () => {
-      if (!hasUnsavedChanges) {
+      if (!hasUnsavedChanges && !isProcessingFile) {
         fetchAndSyncRoster(bulan, tahun, true);
       }
     };
     window.addEventListener('focus', handleWindowFocus);
     return () => window.removeEventListener('focus', handleWindowFocus);
-  }, [bulan, tahun, hasUnsavedChanges]);
+  }, [bulan, tahun, hasUnsavedChanges, isProcessingFile]);
 
   useEffect(() => {
     const handleGlobalMouseUp = () => {
@@ -731,13 +730,14 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
   const persistRosterToServer = async (
     currentEntries: RosterEntry[],
     silent = false,
-    customSignedPdfInfo?: SignedPdfVerificationInfo | null
+    customSignedPdfInfo?: SignedPdfVerificationInfo | null,
+    options?: { month: number; year: number; throwOnError?: boolean }
   ) => {
     if (!canEdit) return;
     if (!silent) setIsSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const monthName = MONTHS[bulan - 1];
+      const monthName = MONTHS[(options?.month ?? bulan) - 1];
 
       const formattedRows = currentEntries.map((e, idx) => {
         const bothKeysDays: Record<string, string> = {};
@@ -763,7 +763,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
 
       const payload: any = {
         bulan: monthName,
-        tahun: String(tahun),
+        tahun: String(options?.year ?? tahun),
         unit: 'ELECTRONIC & IT FACILITY',
         bandara: 'HALIM PERDANAKUSUMA',
         rows: formattedRows,
@@ -788,6 +788,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
         showToast(`✅ Jadwal Daftar Dinas ${monthName} ${tahun} berhasil disimpan!`, 'success');
       }
     } catch (err: any) {
+      if (options?.throwOnError) throw err;
       if (!silent) {
         showToast(err.message || 'Gagal menyimpan jadwal absensi.', 'error');
       }
@@ -1005,497 +1006,69 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
     showToast(`📥 File Excel DAFTAR_DINAS_ELIT_${monthName}_${tahun}.xlsx berhasil diunduh!`, 'success');
   };
 
-  // Klasifikasi warna piksel RGB dari hasil scan tabel Daftar Dinas yang telah di-TTD
-  const classifyScannedCellColor = (
-    r: number,
-    g: number,
-    b: number
-  ): 'P' | 'PS' | 'M' | 'CUTI' | 'DL' | 'WHITE' | 'DARK' => {
-    const avg = (r + g + b) / 3;
-    if (avg < 105) return 'DARK'; // garis tabel atau teks hitam
-
-    // PS (Yellow #ffff00): R tinggi, G tinggi, B rendah, |R - G| kecil
-    if (r > 195 && g > 195 && b < 155 && g - b > 55 && Math.abs(r - g) <= 32) {
-      return 'PS';
-    }
-    // P (Orange #ed7d31): R tinggi, G sedang-tinggi, B rendah, R > G
-    if (r > 190 && g > 120 && b < 150 && r - b > 65 && r - g > 20) {
-      return 'P';
-    }
-    // M (Cyan/Blue #00b0f0): B tinggi, R rendah
-    if (b > 175 && r < 155 && b - r > 50) {
-      return 'M';
-    }
-    // CUTI (Green #92d050): G tertinggi
-    if (g > 150 && g - r > 18 && g - b > 25) {
-      return 'CUTI';
-    }
-    // DL (Grey #a6a6a6 / #bfbfbf): R, G, B seimbang di rentang abu-abu
-    const maxDiff = Math.max(Math.abs(r - g), Math.abs(r - b), Math.abs(g - b));
-    if (maxDiff <= 20 && avg >= 155 && avg <= 218) {
-      return 'DL';
-    }
-    return 'WHITE';
-  };
-
-  // Analisis visual kanvas dokumen PDF/Scan Daftar Dinas yang telah di-TTD Atasan:
-  // 1. Deteksi tanda tangan basah (tinta biru/gelap) di area kanan bawah ("Asst. Manager Of Facility Maintenance - AEP MASHUM NURZAMAN")
-  // 2. Ekstraksi sel warna (P, PS, M, CUTI, DL, L/-) pada grid 31 tanggal & pencocokan dengan jadwal resmi
-  const analyzeScannedRosterCanvas = (
-    canvas: HTMLCanvasElement,
-    activePersonnel: PersonnelItem[]
-  ): {
-    hasSignature: boolean;
-    signatureCropUrl: string;
-    pagePreviewUrl: string;
-    extractedByPerson: Map<string, Record<string, string>>;
-  } => {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    const pagePreviewUrl = canvas.toDataURL('image/jpeg', 0.82);
-
-    // 1. Crop area TTD Atasan di kanan bawah (x: 62%..95%, y: 72%..97%)
-    const sigX = Math.floor(w * 0.62);
-    const sigY = Math.floor(h * 0.72);
-    const sigW = Math.floor(w * 0.33);
-    const sigH = Math.floor(h * 0.25);
-    const sigCanvas = document.createElement('canvas');
-    sigCanvas.width = Math.max(1, sigW);
-    sigCanvas.height = Math.max(1, sigH);
-    const sigCtx = sigCanvas.getContext('2d');
-    if (sigCtx) {
-      sigCtx.drawImage(canvas, sigX, sigY, sigW, sigH, 0, 0, sigW, sigH);
-    }
-    const signatureCropUrl = sigCanvas.toDataURL('image/jpeg', 0.88);
-
-    if (!ctx) {
-      return {
-        hasSignature: true,
-        signatureCropUrl,
-        pagePreviewUrl,
-        extractedByPerson: new Map()
-      };
-    }
-
-    const imgData = ctx.getImageData(0, 0, w, h).data;
-    const getRGB = (x: number, y: number): [number, number, number] => {
-      const idx = (Math.floor(y) * w + Math.floor(x)) * 4;
-      return [imgData[idx] || 255, imgData[idx + 1] || 255, imgData[idx + 2] || 255];
-    };
-
-    // Hitung piksel tinta biru / goresan tanda tangan di area kanan bawah
-    let blueInkPixels = 0;
-    let darkStrokePixels = 0;
-    for (let y = Math.floor(h * 0.78); y < Math.floor(h * 0.96); y += 2) {
-      for (let x = Math.floor(w * 0.68); x < Math.floor(w * 0.92); x += 2) {
-        const [r, g, b] = getRGB(x, y);
-        if (b > 95 && b - r > 28 && r < 185) {
-          blueInkPixels++;
-        } else if ((r + g + b) / 3 < 130) {
-          darkStrokePixels++;
-        }
-      }
-    }
-    const hasSignature = blueInkPixels > 15 || darkStrokePixels > 45;
-
-    // 2. Deteksi batas horizontal 31 kolom tanggal [minShiftX, maxShiftX] dan baris berwarna
-    const yStart = Math.floor(h * 0.18);
-    const yEnd = Math.floor(h * 0.75);
-    const xStart = Math.floor(w * 0.24);
-    const xEnd = Math.floor(w * 0.95);
-
-    const colColorCounts = new Array(w).fill(0);
-    const rowColorCounts = new Array(h).fill(0);
-
-    for (let y = yStart; y <= yEnd; y += 2) {
-      for (let x = xStart; x <= xEnd; x += 2) {
-        const [r, g, b] = getRGB(x, y);
-        const cls = classifyScannedCellColor(r, g, b);
-        if (cls === 'P' || cls === 'PS' || cls === 'M' || cls === 'CUTI') {
-          colColorCounts[x]++;
-          rowColorCounts[y]++;
-        }
-      }
-    }
-
-    let minShiftX = Math.floor(w * 0.291);
-    let maxShiftX = Math.floor(w * 0.929);
-
-    const validXs: number[] = [];
-    for (let x = xStart; x <= xEnd; x++) {
-      if (colColorCounts[x] >= 3) validXs.push(x);
-    }
-    if (validXs.length > 20) {
-      minShiftX = validXs[0];
-      maxShiftX = validXs[validXs.length - 1];
-    }
-
-    const colWidth = (maxShiftX - minShiftX) / 31;
-
-    // Cari segmen vertikal pita grup (APINDO, IASS, NTI) yang dipisahkan oleh baris sub-header putih
-    const rawBands: Array<{ startY: number; endY: number }> = [];
-    let inBand = false;
-    let bandStart = 0;
-    let gapCount = 0;
-
-    for (let y = yStart; y <= yEnd; y += 2) {
-      if (rowColorCounts[y] >= 3) {
-        if (!inBand) {
-          inBand = true;
-          bandStart = y;
-        }
-        gapCount = 0;
-      } else if (inBand) {
-        gapCount += 2;
-        if (gapCount >= Math.max(6, Math.floor(h * 0.009))) {
-          rawBands.push({ startY: bandStart, endY: y - gapCount });
-          inBand = false;
-        }
-      }
-    }
-    if (inBand) {
-      rawBands.push({ startY: bandStart, endY: yEnd });
-    }
-
-    // Filter pita yang cukup tinggi untuk menjadi grup personil
-    const groupBands = rawBands.filter(b => b.endY - b.startY >= Math.floor(h * 0.03));
-
-    const extractedByPerson = new Map<string, Record<string, string>>();
-
-    // Urutan baris pada dokumen resmi DAFTAR DINAS Oktober 2026 yang di-TTD
-    const SIGNED_PDF_GROUP_ROWS: Record<'APINDO' | 'IASS' | 'NTI', string[]> = {
-      APINDO: [
-        'AEP MASHUM NURZAMAN',
-        'RAHMAT D. CAHYO',
-        'EKA YULIANI S.',
-        'RIZKO E. NUGRAHA',
-        'ISTIANAH RAHMAH DEWI',
-        'MAULANA HADY C. S.'
-      ],
-      IASS: [
-        'ADELIA PUSPITA',
-        'MAHDI ALHABSYI',
-        'M. ROIM',
-        'AHMAD FANGKY S.',
-        'DENNIS SAYYIDINAA R.',
-        'ABDUL KODIR',
-        'YUDHA ISMUNANDAR',
-        'KARUNIAWAN GEOVANI'
-      ],
-      NTI: [
-        'LUTHFIANDA MUZAKI S',
-        'YOAN HERNANTRA',
-        'FARIZ SOLAHUDIN',
-        'MUHAMMAD FACHREZA',
-        'ZAKY ALHADY',
-        'DESI DWI NUR HARTATI'
-      ]
-    };
-
-    const groupKeys: Array<'APINDO' | 'IASS' | 'NTI'> = ['APINDO', 'IASS', 'NTI'];
-
-    groupKeys.forEach((gKey, gIdx) => {
-      const band = groupBands[gIdx];
-      const namesInSignedDoc = SIGNED_PDF_GROUP_ROWS[gKey];
-      const rowCount = namesInSignedDoc.length;
-
-      namesInSignedDoc.forEach((docPersonName, rIdx) => {
-        const normName = normalizeNameKey(docPersonName);
-        const presetArr = OCT_2026_PRESETS[docPersonName] || OCT_2026_PRESETS[normName];
-        const personShifts: Record<string, string> = {};
-
-        // Tentukan apakah personil NTI reguler (menggunakan 'L') atau shift (menggunakan '-')
-        const usesDashForOff =
-          gKey === 'NTI' &&
-          normName !== 'LUTHFIANDA MUZAKI S' &&
-          normName !== 'DESI DWI NUR HARTATI';
-
-        for (let d = 1; d <= 31; d++) {
-          let detectedCode = usesDashForOff ? '-' : 'L';
-
-          if (band && colWidth > 4) {
-            const rowH = (band.endY - band.startY) / rowCount;
-            const centerY = band.startY + (rIdx + 0.5) * rowH;
-            const centerX = minShiftX + (d - 0.5) * colWidth;
-
-            // Ambil sampel 9 titik di sekitar pusat sel untuk menghindari garis teks hitam di tengah
-            const votes: Record<string, number> = { P: 0, PS: 0, M: 0, CUTI: 0, DL: 0, WHITE: 0 };
-            for (const dy of [-rowH * 0.22, 0, rowH * 0.22]) {
-              for (const dx of [-colWidth * 0.22, 0, colWidth * 0.22]) {
-                const [r, g, b] = getRGB(centerX + dx, centerY + dy);
-                const c = classifyScannedCellColor(r, g, b);
-                if (c !== 'DARK') {
-                  votes[c] = (votes[c] || 0) + 1;
-                }
-              }
-            }
-
-            // Pilih warna dominan jika bukan putih
-            const coloredCandidates: Array<'P' | 'PS' | 'M' | 'CUTI' | 'DL'> = ['P', 'PS', 'M', 'CUTI', 'DL'];
-            let bestColor: string = 'WHITE';
-            let bestCount = 0;
-            coloredCandidates.forEach(c => {
-              if (votes[c] > bestCount) {
-                bestCount = votes[c];
-                bestColor = c;
-              }
-            });
-
-            if (bestCount >= 2) {
-              detectedCode = bestColor;
-            }
-          }
-
-          // Cross-verify dengan jadwal resmi dokumen TTD Oktober 2026 agar presisi 100%
-          if (presetArr && presetArr[d - 1]) {
-            detectedCode = presetArr[d - 1];
-          }
-
-          personShifts[String(d)] = detectedCode;
-          personShifts[String(d).padStart(2, '0')] = detectedCode;
-        }
-
-        extractedByPerson.set(normName, personShifts);
-      });
-    });
-
-    // Pastikan jika ada personil aktif lain (misal RISKI RACHMAD SANTOSO jika aktif), juga terpetakan
-    activePersonnel.forEach(p => {
-      const norm = normalizeNameKey(p.nama);
-      if (!extractedByPerson.has(norm)) {
-        extractedByPerson.set(norm, buildDefaultShiftsForPerson(p.nama, p.instansi, bulan, tahun));
-      }
-    });
-
-    return {
-      hasSignature,
-      signatureCropUrl,
-      pagePreviewUrl,
-      extractedByPerson
-    };
-  };
-
-  // Proses file PDF atau Gambar Scan Daftar Dinas yang telah di-TTD Atasan
   const handleProcessSignedPdfOrScan = async (file: File) => {
-    if (!canEdit) {
-      showToast('Anda tidak memiliki akses untuk menyinkronkan dokumen absensi.', 'error');
+    if (!canEdit || isProcessingFile) return;
+    if (isLoading || isSaving) { showToast('Tunggu pemuatan atau penyimpanan jadwal selesai.', 'info'); return; }
+    if (hasUnsavedChanges) {
+      showToast('Simpan perubahan jadwal terlebih dahulu sebelum mengimpor dokumen.', 'error');
       return;
     }
-
     setIsProcessingFile(true);
-    showToast(`🔍 Membaca & memverifikasi dokumen TTD Atasan "${file.name}"...`, 'info');
-
+    setImportProgress('Membaca dokumen...');
     try {
-      const { activeList: currentActiveUsers, inactiveSet } = await fetchAllDatabasePersonnel();
-
-      let canvas = document.createElement('canvas');
-      let digitalTextRows: string[][] = [];
-      let hasDigitalSignatureKeyword = false;
-
-      if (/\.pdf$/i.test(file.name)) {
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdfDoc = await loadingTask.promise;
-        const page = await pdfDoc.getPage(1);
-
-        // 1. Cek apakah PDF memiliki text layer digital
-        try {
-          const textContent = await page.getTextContent();
-          const items = (textContent.items || []) as any[];
-          const rowBuckets: Array<{ y: number; cells: Array<{ x: number; str: string }> }> = [];
-
-          items.forEach(item => {
-            const str = String(item.str || '').trim();
-            if (!str) return;
-            const upper = str.toUpperCase();
-            if (
-              upper.includes('ASST. MANAGER') ||
-              upper.includes('FACILITY MAINTENANCE') ||
-              upper.includes('MENGETAHUI')
-            ) {
-              hasDigitalSignatureKeyword = true;
-            }
-            const x = item.transform ? item.transform[4] : 0;
-            const y = item.transform ? item.transform[5] : 0;
-            let bucket = rowBuckets.find(b => Math.abs(b.y - y) <= 4.5);
-            if (!bucket) {
-              bucket = { y, cells: [] };
-              rowBuckets.push(bucket);
-            }
-            bucket.cells.push({ x, str });
-          });
-
-          // Urutkan dari atas ke bawah (Y menurun pada koordinat PDF) lalu kiri ke kanan (X menaik)
-          rowBuckets.sort((a, b) => b.y - a.y);
-          digitalTextRows = rowBuckets.map(b => {
-            b.cells.sort((c1, c2) => c1.x - c2.x);
-            return b.cells.map(c => c.str);
-          });
-        } catch (e) {}
-
-        // 2. Render halaman 1 PDF ke Canvas resolusi tinggi untuk ekstraksi visual & verifikasi TTD basah
-        const viewport = page.getViewport({ scale: 2.0 });
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-        }
-      } else {
-        // Jika pengguna men-drop file hasil scan gambar (.jpg / .jpeg / .png) dari PDF TTD
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-          image.src = dataUrl;
-        });
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-        }
-      }
-
-      // Jalankan ekstraksi visual & deteksi TTD Atasan pada kanvas
-      const scanAnalysis = analyzeScannedRosterCanvas(canvas, currentActiveUsers);
-
-      // Jika PDF memiliki text layer digital yang memuat baris personil dan kode shift, ekstrak juga dari text layer
-      if (digitalTextRows.length > 5) {
-        const VALID_CODES = new Set(['P', 'PS', 'M', 'DL', 'CUTI', 'L', '-']);
-        digitalTextRows.forEach(rowCells => {
-          const joinedUpper = rowCells.join(' ').toUpperCase();
-          currentActiveUsers.forEach(u => {
-            const normUser = normalizeNameKey(u.nama);
-            if (normalizeNameKey(joinedUpper).includes(normUser)) {
-              const shiftTokens = rowCells
-                .map(c => c.toUpperCase().trim())
-                .filter(c => VALID_CODES.has(c));
-              if (shiftTokens.length >= 20) {
-                const map: Record<string, string> = {};
-                for (let d = 1; d <= 31; d++) {
-                  const code = shiftTokens[d - 1] || (u.instansi === 'NTI' ? '-' : 'L');
-                  map[String(d)] = code;
-                  map[String(d).padStart(2, '0')] = code;
-                }
-                scanAnalysis.extractedByPerson.set(normUser, map);
-              }
-            }
-          });
-        });
-      }
-
-      // Sinkronkan jadwal hasil pembacaan PDF TTD dengan daftar personil AKTIF
-      // dan hitung berapa sel jadwal yang dikoreksi otomatis agar sesuai dengan PDF TTD Atasan!
-      const updatedMap = new Map<string, RosterEntry>();
-      entries.forEach(e => {
-        const norm = normalizeNameKey(e.nama);
-        if (!inactiveSet.has(norm) && !inactiveSet.has(e.nama.toUpperCase().trim())) {
-          updatedMap.set(norm, { ...e, shifts: { ...e.shifts } });
-        }
+      const { activeList, apiSuccess } = await fetchAllDatabasePersonnel();
+      if (!apiSuccess) throw new Error('Daftar personil gagal dimuat. Periksa koneksi server.');
+      const { readRosterFile } = await import('../utils/rosterScan');
+      const parsed = await readRosterFile(file, activeList, setImportProgress);
+      const token = localStorage.getItem('token');
+      const targetMonth = MONTHS[parsed.month - 1];
+      const response = await fetch(`/api/attendance/roster?bulan=${encodeURIComponent(targetMonth)}&tahun=${parsed.year}`, {
+        headers: { Authorization: `Bearer ${token}` }, cache: 'no-store'
       });
-
-      currentActiveUsers.forEach((u, idx) => {
-        const norm = normalizeNameKey(u.nama);
-        if (!updatedMap.has(norm)) {
-          updatedMap.set(norm, {
-            userId: u._id || '',
-            nama: u.nama,
-            nik: getDefaultNikForName(u.nama, u.nik),
-            instansi: u.instansi,
-            urutan: idx + 1,
-            shifts: buildDefaultShiftsForPerson(u.nama, u.instansi, bulan, tahun)
-          });
-        }
-      });
-
-      let syncedCount = 0;
+      if (!response.ok) throw new Error('Jadwal tujuan gagal dimuat. Tidak ada perubahan yang disimpan.');
+      const existing = await response.json();
+      const imported = new Map(parsed.rows.map(row => [normalizeNameKey(row.nama), row]));
       let correctedCellsCount = 0;
-      const skippedInactive: string[] = [];
-
-      // Catat akun non-active yang dilewati
-      inactiveSet.forEach(inactName => {
-        if (inactName.includes(' ') && !skippedInactive.includes(inactName)) {
-          skippedInactive.push(inactName);
-        }
-      });
-
-      updatedMap.forEach((entry, normKey) => {
-        const pdfShifts = scanAnalysis.extractedByPerson.get(normKey);
-        if (pdfShifts) {
-          const nextShifts = { ...entry.shifts };
-          for (let d = 1; d <= daysInMonth; d++) {
-            const kNum = String(d);
-            const kPad = kNum.padStart(2, '0');
-            const oldCode = (entry.shifts[kNum] ?? entry.shifts[kPad] ?? '').toUpperCase().trim();
-            const newCode = (pdfShifts[kNum] ?? pdfShifts[kPad] ?? oldCode).toUpperCase().trim();
-            if (oldCode !== newCode) {
-              correctedCellsCount++;
-            }
-            nextShifts[kNum] = newCode;
-            nextShifts[kPad] = newCode;
+      const finalEntries: RosterEntry[] = (existing.entries || existing.rows || []).map((row: any, idx: number) => {
+        const nama = row.nama || row.namaLengkap;
+        const source = imported.get(normalizeNameKey(nama));
+        const shifts = { ...(row.shifts || row.days || {}) };
+        if (source) {
+          for (let day = 1; day <= new Date(parsed.year, parsed.month, 0).getDate(); day++) {
+            const key = String(day), padded = key.padStart(2, '0');
+            const code = source.shifts[key];
+            if (code === undefined) continue;
+            if ((shifts[key] ?? shifts[padded]) !== code) correctedCellsCount++;
+            shifts[key] = shifts[padded] = code;
           }
-          updatedMap.set(normKey, {
-            ...entry,
-            nik: getDefaultNikForName(entry.nama, entry.nik),
-            shifts: nextShifts
-          });
-          syncedCount++;
         }
+        return { userId: row.userId, nama, nik: row.nik, instansi: normalizeInstansi(row.instansi || row.perusahaan), urutan: idx + 1, shifts };
       });
-
-      const compOrder = { APINDO: 1, IASS: 2, NTI: 3 };
-      const finalEntries = Array.from(updatedMap.values())
-        .sort((a, b) => {
-          if (compOrder[a.instansi] !== compOrder[b.instansi]) {
-            return compOrder[a.instansi] - compOrder[b.instansi];
-          }
-          const pref = PREFERRED_ORDER[a.instansi] || [];
-          const idxA = pref.findIndex(n => normalizeNameKey(n) === normalizeNameKey(a.nama));
-          const idxB = pref.findIndex(n => normalizeNameKey(n) === normalizeNameKey(b.nama));
-          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-          if (idxA !== -1) return -1;
-          if (idxB !== -1) return 1;
-          return a.urutan - b.urutan;
-        })
-        .map((item, idx) => ({ ...item, urutan: idx + 1 }));
-
+      if (!finalEntries.length) throw new Error('Daftar jadwal tujuan kosong. Impor dibatalkan.');
+      const unreadCells = parsed.rows.flatMap(row => row.unreadDays.map(day => `${row.nama}: tanggal ${day}`));
+      const matchedNames = new Set(finalEntries.map(row => normalizeNameKey(row.nama)));
+      const syncedCount = parsed.rows.filter(row => matchedNames.has(normalizeNameKey(row.nama))).length;
+      if (!syncedCount) throw new Error('Tidak ada personil hasil pembacaan yang cocok dengan jadwal tujuan.');
+      const unmatchedPersonnel = activeList.filter(p => !imported.has(normalizeNameKey(p.nama))).map(p => p.nama);
       const verificationInfo: SignedPdfVerificationInfo = {
-        fileName: file.name,
-        uploadedAt: new Date().toLocaleString('id-ID'),
-        hasSignature: scanAnalysis.hasSignature || hasDigitalSignatureKeyword,
-        signerName: 'AEP MASHUM NURZAMAN',
-        signerTitle: 'Asst. Manager Of Facility Maintenance',
-        syncedCount,
-        correctedCellsCount,
-        skippedInactive,
-        signatureCropUrl: scanAnalysis.signatureCropUrl,
-        pagePreviewUrl: scanAnalysis.pagePreviewUrl
+        fileName: file.name, uploadedAt: new Date().toLocaleString('id-ID'),
+        hasSignature: false, signerName: '', signerTitle: '',
+        syncedCount, correctedCellsCount, skippedInactive: [],
+        pagePreviewUrl: parsed.pagePreviewUrl, unreadCells, warnings: parsed.warnings,
+        unmatchedPersonnel, sourcePeriod: `${targetMonth} ${parsed.year}`
       };
-
-      setEntries(finalEntries);
-      setSignedPdfInfo(verificationInfo);
-
-      await persistRosterToServer(finalEntries, true, verificationInfo);
-
-      showToast(
-        `✅ Dokumen TTD Atasan "${file.name}" berhasil dibaca & disinkronkan! (${syncedCount} personil aktif sinkron` +
-          (correctedCellsCount > 0 ? `, ${correctedCellsCount} sel disesuaikan otomatis` : ', 100% sesuai jadwal') +
-          `)`,
-        'success'
-      );
+      setImportProgress(`Menyimpan jadwal ${targetMonth} ${parsed.year}...`);
+      await persistRosterToServer(finalEntries, true, verificationInfo, { month: parsed.month, year: parsed.year, throwOnError: true });
+      setBulan(parsed.month); setTahun(parsed.year);
+      setEntries(finalEntries); setSignedPdfInfo(verificationInfo);
+      showToast(`Jadwal ${targetMonth} ${parsed.year} tersimpan: ${syncedCount} personil, ${correctedCellsCount} sel berubah.` +
+        (unreadCells.length ? ` ${unreadCells.length} sel belum terbaca dan tetap memakai nilai sebelumnya; lihat rincian impor.` : '') +
+        (unmatchedPersonnel.length ? ` ${unmatchedPersonnel.length} personil tidak ditemukan dalam scan.` : ''), unreadCells.length ? 'info' : 'success');
     } catch (err: any) {
-      console.error('[PDF TTD Import Error]:', err);
-      showToast('Gagal membaca file PDF TTD Atasan. Pastikan file PDF atau hasil scan valid.', 'error');
+      console.error('[Roster import]', err);
+      showToast(err.message || 'Dokumen gagal dibaca. Jadwal tidak diubah.', 'error');
     } finally {
-      setIsProcessingFile(false);
+      setIsProcessingFile(false); setImportProgress('');
       if (pdfInputRef.current) pdfInputRef.current.value = '';
       if (excelInputRef.current) excelInputRef.current.value = '';
     }
@@ -1503,6 +1076,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
 
   // Handler terpadu untuk Drag & Drop file (mendukung Excel .xlsx/.xls/.csv MAUPUN PDF/Scan TTD Atasan .pdf/.jpg/.png)
   const handleProcessUploadedFile = async (file: File) => {
+    if (isProcessingFile) return;
     if (/\.(pdf|jpg|jpeg|png)$/i.test(file.name)) {
       await handleProcessSignedPdfOrScan(file);
     } else if (/\.(xlsx|xls|csv)$/i.test(file.name)) {
@@ -1962,6 +1536,14 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
         }}
       />
 
+      {isProcessingFile && (
+        <div role="status" aria-live="polite" className="fixed inset-0 z-[290] bg-slate-900/40 flex items-center justify-center p-6">
+          <div className="rounded-2xl bg-white p-6 shadow-xl max-w-lg text-center">
+            <p className="font-bold text-slate-800">{importProgress || 'Memproses dokumen...'}</p>
+            <p className="text-sm text-slate-500 mt-2">Tunggu sampai pembacaan dan penyimpanan selesai.</p>
+          </div>
+        </div>
+      )}
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-[300] max-w-md animate-fadeIn">
@@ -1998,7 +1580,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
                   {signedPdfInfo && (
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
                       <span>✍️</span>
-                      <span>TTD Atasan Tersinkron ({signedPdfInfo.signerName})</span>
+                      <span>Dokumen Jadwal Tersinkron</span>
                     </span>
                   )}
                 </div>
@@ -2180,7 +1762,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
                 <div className="text-xs sm:text-sm font-extrabold text-slate-800 flex flex-wrap items-center gap-2">
                   <span>Drag &amp; Drop Dokumen Absensi TTD Atasan (.PDF / Scan) atau File Excel (.XLSX) ke Sini</span>
                   <span className="px-2 py-0.5 text-[10px] font-black rounded-md bg-blue-100 text-blue-800 border border-blue-200">
-                    DETEKSI TTD ATASAN &amp; WARNA SHIFT OTOMATIS
+                    BACA JADWAL DARI PDF / SCAN
                   </span>
                   <span className="px-2 py-0.5 text-[10px] font-black rounded-md bg-teal-100 text-teal-800 border border-teal-200">
                     AUTO-SYNC AKUN AKTIF
@@ -2245,7 +1827,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
                       ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                       : 'bg-amber-100 text-amber-800 border-amber-300'
                   }`}>
-                    {signedPdfInfo.hasSignature ? '✓ TERVERIFIKASI TTD ATASAN' : 'DOKUMEN ABSENSI TERSINKRON'}
+                    {signedPdfInfo.hasSignature ? 'DOKUMEN JADWAL TERSINKRON' : 'DOKUMEN ABSENSI TERSINKRON'}
                   </span>
                   <span className="text-xs sm:text-sm font-black text-slate-800">
                     {signedPdfInfo.fileName}
@@ -2255,8 +1837,8 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
                   </span>
                 </div>
                 <div className="text-xs text-slate-600 font-semibold flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span>👔 Pejabat Pengesah: <b className="text-slate-900">{signedPdfInfo.signerName}</b> ({signedPdfInfo.signerTitle})</span>
-                  <span>📍 Pengesahan: <b className="text-slate-800">Jakarta, 22 September {tahun}</b></span>
+                  <span>Periode dokumen: <b>{signedPdfInfo.sourcePeriod || `${MONTHS[bulan - 1]} ${tahun}`}</b></span>
+                  <span>Diimpor: {signedPdfInfo.uploadedAt}. Tanda tangan dapat dilihat pada dokumen asli.</span>
                   <span>👥 Status Akun: <b className="text-emerald-700">{signedPdfInfo.syncedCount} Aktif Tersinkron</b>{signedPdfInfo.skippedInactive.length > 0 ? ` (${signedPdfInfo.skippedInactive.length} Non-Aktif Dilewati)` : ''}</span>
                 </div>
               </div>
@@ -2295,6 +1877,14 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
           </div>
         )}
 
+        {signedPdfInfo && ((signedPdfInfo.unreadCells?.length || 0) + (signedPdfInfo.unmatchedPersonnel?.length || 0) + (signedPdfInfo.warnings?.length || 0) > 0) && (
+          <details className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" open>
+            <summary className="font-bold cursor-pointer">Rincian impor yang perlu diperiksa</summary>
+            {!!signedPdfInfo.unreadCells?.length && <p className="mt-2">Sel belum terbaca (nilai lama dipertahankan): {signedPdfInfo.unreadCells.join('; ')}</p>}
+            {!!signedPdfInfo.unmatchedPersonnel?.length && <p className="mt-2">Personil tidak ditemukan dalam dokumen (jadwal tidak diubah): {signedPdfInfo.unmatchedPersonnel.join(', ')}</p>}
+            {signedPdfInfo.warnings?.map((warning, i) => <p key={i} className="mt-2">{warning}</p>)}
+          </details>
+        )}
         {/* Palette Drag & Drop + Mode Kuas */}
         {canEdit && (
           <div className="bg-slate-50/95 border border-slate-200/90 rounded-2xl p-4 flex flex-col gap-3.5">
@@ -2819,7 +2409,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
             <div className="flex flex-col items-center md:items-end justify-between text-center pr-2">
               <div className="w-64 text-center space-y-1">
                 <div className="text-[11px] font-semibold text-slate-800">
-                  {`Jakarta, 22 September ${tahun}`}
+                  Jakarta, ................................
                 </div>
                 <div className="text-[11px] font-bold text-slate-900">
                   {signedPdfInfo?.signerTitle || 'Asst. Manager Of Facility Maintenance'}
@@ -3251,7 +2841,7 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
                     Bukti Dokumen Daftar Dinas TTD Atasan — {signedPdfInfo.fileName}
                   </h3>
                   <p className="text-xs text-blue-100 font-medium">
-                    Disahkan oleh: {signedPdfInfo.signerName} ({signedPdfInfo.signerTitle}) • Jakarta, 22 September {tahun}
+                    Diimpor: {signedPdfInfo.uploadedAt} • {signedPdfInfo.sourcePeriod}
                   </p>
                 </div>
               </div>
@@ -3267,13 +2857,13 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
             <div className="p-6 overflow-y-auto space-y-5 bg-slate-100 flex-1">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase">Status Pengesahan</div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase">Status Impor</div>
                   <div className="text-sm font-black text-emerald-700 mt-1 flex items-center gap-1.5">
                     <span>✅</span>
-                    <span>{signedPdfInfo.hasSignature ? 'Tanda Tangan Atasan Terverifikasi' : 'Dokumen Absensi Tersinkron'}</span>
+                    <span>{signedPdfInfo.hasSignature ? 'Dokumen Jadwal Tersinkron' : 'Dokumen Absensi Tersinkron'}</span>
                   </div>
                   <div className="text-xs font-semibold text-slate-600 mt-1">
-                    {signedPdfInfo.signerTitle}: <b>{signedPdfInfo.signerName}</b>
+                    Tanda tangan tidak diverifikasi otomatis. Periksa dokumen asli.
                   </div>
                 </div>
 
@@ -3285,14 +2875,14 @@ export default function ManagementAbsensi({ userRole }: ManagementAbsensiProps) 
                   <div className="text-xs font-semibold text-slate-600 mt-1">
                     {signedPdfInfo.skippedInactive.length > 0
                       ? `${signedPdfInfo.skippedInactive.length} personil Non-Aktif otomatis disembunyikan`
-                      : 'Seluruh personil aktif telah sesuai jadwal TTD'}
+                      : 'Lihat rincian impor untuk personil atau sel yang perlu diperiksa'}
                   </div>
                 </div>
 
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-[11px] font-bold text-slate-400 uppercase">Potongan Area TTD</div>
-                    <div className="text-xs font-bold text-slate-700 mt-0.5">Jakarta, 22 September {tahun}</div>
+                    <div className="text-[11px] font-bold text-slate-400 uppercase">Dokumen Asli</div>
+                    <div className="text-xs font-bold text-slate-700 mt-0.5">{signedPdfInfo.sourcePeriod || `${MONTHS[bulan - 1]} ${tahun}`}</div>
                   </div>
                   {signedPdfInfo.signatureCropUrl && (
                     <img
