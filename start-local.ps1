@@ -8,7 +8,7 @@ if (-not (Get-NetTCPConnection -LocalPort 27017 -State Listen -ErrorAction Silen
 }
 foreach ($app in @(
     @{ Name = 'backend'; Port = 5000; Args = '--import tsx src/index.ts' },
-    @{ Name = 'frontend'; Port = 5173; Args = 'node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --strictPort' }
+    @{ Name = 'frontend'; Port = 5173; Args = 'node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173 --strictPort' }
 )) {
     if (Get-NetTCPConnection -LocalPort $app.Port -State Listen -ErrorAction SilentlyContinue) {
         Write-Host "$($app.Name): port $($app.Port) sudah digunakan; proses tidak dijalankan ulang."
@@ -17,4 +17,4 @@ foreach ($app in @(
     $proc = Start-Process -FilePath $node -ArgumentList $app.Args -WorkingDirectory (Join-Path $root $app.Name) -WindowStyle Hidden -RedirectStandardOutput (Join-Path $root "logs/$($app.Name).log") -RedirectStandardError (Join-Path $root "logs/$($app.Name).error.log") -PassThru
     Write-Host "$($app.Name) dimulai, PID $($proc.Id)"
 }
-Write-Host 'Buka http://localhost:5173'
+Write-Host 'Buka https://localhost:5173'
