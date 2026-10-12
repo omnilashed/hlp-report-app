@@ -43,8 +43,12 @@ const parseIndonesianDate = (dateStr: string) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const now = new Date();
-    const tahun = parseInt(req.query.tahun as string, 10) || now.getFullYear();
-    const bulan = parseInt(req.query.bulan as string, 10) || (now.getMonth() + 1);
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth() + 1;
+    const todayDay = now.getDate();
+
+    const tahun = parseInt(req.query.tahun as string, 10) || todayYear;
+    const bulan = parseInt(req.query.bulan as string, 10) || todayMonth;
     const mainCategory = (req.query.mainCategory as string) || 'Semua';
     const subCategory = (req.query.subCategory as string) || 'Semua';
 
@@ -62,18 +66,88 @@ router.get('/', async (req: Request, res: Response) => {
       .sort({ mainCategory: 1, subCategory: 1, namaPeralatan: 1, lokasi: 1 })
       .lean();
 
+    // Ambil seluruh laporan logbook harian aktif (tanpa field gambar berat) agar selalu sinkron 100%
+    const allActiveReports = await Report.find(
+      {},
+      { _id: 1, tanggal: 1, dinas: 1, kondisiFasilitas: 1, status: 1, createdAt: 1, updatedAt: 1 }
+    )
+      .sort({ createdAt: 1, updatedAt: 1 })
+      .lean();
+
+    const validReportIdSet = new Set(allActiveReports.map(r => String(r._id)));
+
     // Ambil logs harian yang tercatat di bulan ini
-    const logs = await EquipmentMonthlyLog.find({ tahun, bulan }).lean();
+    const rawLogs = await EquipmentMonthlyLog.find({ tahun, bulan }).lean();
+    // Filter hanya log yang berasal dari report aktif (atau log mandiri tanpa reportId)
+    const logs = rawLogs.filter(lg => !lg.reportId || validReportIdSet.has(String(lg.reportId)));
+
+    // Bersihkan log yatim (orphaned) di background jika ada report yang sudah dihapus
+    if (rawLogs.length !== logs.length) {
+      const orphanIds = rawLogs
+        .filter(lg => lg.reportId && !validReportIdSet.has(String(lg.reportId)))
+        .map(lg => lg._id);
+      if (orphanIds.length > 0) {
+        EquipmentMonthlyLog.deleteMany({ _id: { $in: orphanIds } }).catch(() => {});
+      }
+    }
 
     // Ambil data laporan kerusakan di bulan ini untuk mengidentifikasi jam terputus jika ada
     const damageReports = await DamageReport.find({}).lean();
 
-    // Map logs berdasarkan key: `${namaPeralatan}__${lokasi}__${day}`
-    const logMap: Record<string, any[]> = {};
+    // Map logs berdasarkan ID maupun namaPeralatan + lokasi + hari, serta catat hari yang memiliki logbook
+    const logByIdMap: Record<string, any[]> = {};
+    const logByNameLocMap: Record<string, any[]> = {};
+    const daysWithLogbook = new Set<number>();
+
+    const registerLogEntry = (entry: {
+      equipmentId?: string;
+      namaPeralatan: string;
+      lokasi: string;
+      hari: number;
+      kondisi: string;
+      statusPeralatan: string;
+    }) => {
+      if (!entry.namaPeralatan || !entry.hari) return;
+      daysWithLogbook.add(entry.hari);
+      if (entry.equipmentId) {
+        const idKey = `${String(entry.equipmentId).trim()}__${entry.hari}`;
+        if (!logByIdMap[idKey]) logByIdMap[idKey] = [];
+        logByIdMap[idKey].push(entry);
+      }
+      const nameLocKey = `${entry.namaPeralatan.toLowerCase().trim()}__${(entry.lokasi || '-').toLowerCase().trim()}__${entry.hari}`;
+      if (!logByNameLocMap[nameLocKey]) logByNameLocMap[nameLocKey] = [];
+      logByNameLocMap[nameLocKey].push(entry);
+    };
+
+    // 1. Masukkan dari EquipmentMonthlyLog
     for (const lg of logs) {
-      const key = `${lg.namaPeralatan.toLowerCase().trim()}__${lg.lokasi.toLowerCase().trim()}__${lg.hari}`;
-      if (!logMap[key]) logMap[key] = [];
-      logMap[key].push(lg);
+      registerLogEntry({
+        equipmentId: lg.equipmentId ? String(lg.equipmentId) : '',
+        namaPeralatan: lg.namaPeralatan,
+        lokasi: lg.lokasi || '-',
+        hari: lg.hari,
+        kondisi: lg.kondisi || 'Normal',
+        statusPeralatan: lg.statusPeralatan || 'Ready'
+      });
+    }
+
+    // 2. Pastikan laporan harian (Report) pada bulan & tahun ini langsung terbaca (menimpa dengan data terbaru dari logbook harian)
+    for (const rep of allActiveReports) {
+      if (!Array.isArray(rep.kondisiFasilitas) || rep.kondisiFasilitas.length === 0) continue;
+      const dInfo = parseIndonesianDate(rep.tanggal);
+      if (dInfo.year !== tahun || dInfo.month !== bulan) continue;
+
+      for (const kf of rep.kondisiFasilitas) {
+        if (!kf || !kf.namaPeralatan) continue;
+        registerLogEntry({
+          equipmentId: kf._id ? String(kf._id) : '',
+          namaPeralatan: kf.namaPeralatan,
+          lokasi: kf.lokasi || '-',
+          hari: dInfo.day,
+          kondisi: kf.kondisi || 'Normal',
+          statusPeralatan: kf.statusPeralatan || 'Ready'
+        });
+      }
     }
 
     // Kelompokkan peralatan berdasarkan namaPeralatan (seperti FTD, X-RAY, WTMD, HHMD, CCTV, dll.)
@@ -108,23 +182,42 @@ router.get('/', async (req: Request, res: Response) => {
         let itemDownHours = 0;
 
         for (let d = 1; d <= daysInMonth; d++) {
-          const logKey = `${item.namaPeralatan.toLowerCase().trim()}__${item.lokasi.toLowerCase().trim()}__${d}`;
-          const dayLogs = logMap[logKey] || [];
+          const idKey = `${String(item._id).trim()}__${d}`;
+          const nameLocKey = `${item.namaPeralatan.toLowerCase().trim()}__${(item.lokasi || '-').toLowerCase().trim()}__${d}`;
+          const dayLogs = logByIdMap[idKey] || logByNameLocMap[nameLocKey] || [];
 
-          // Status & kondisi hari ini (ambil yang terbaru pada hari tersebut)
-          let cellCode = '0'; // default Normal / Ready (0 jam terputus)
-          let cellColor = 'green';
-          let cellDownHours = 0;
-          let cellStatus = item.statusPeralatan || 'Ready';
-          let cellKondisi = item.kondisi || 'Normal';
+          const isPastDay =
+            tahun < todayYear ||
+            (tahun === todayYear && bulan < todayMonth) ||
+            (tahun === todayYear && bulan === todayMonth && d < todayDay);
+
+          const hasLogForDay = dayLogs.length > 0 || daysWithLogbook.has(d);
+
+          // Jika hari ini / hari ke depan (bukan hari yang lalu) DAN belum ada logbook harian yang diisi,
+          // maka biarkan sel kondisi peralatan KOSONG hingga logbook hariannya diisi
+          if (!hasLogForDay && !isPastDay) {
+            daysData[d] = {
+              code: '',
+              color: 'empty',
+              downHours: 0,
+              status: 'Belum Diisi',
+              kondisi: '-'
+            };
+            continue;
+          }
+
+          // Jika ada logbook harian yang diisi, ikuti hasil pengecekan fasilitas harian dari logbook.
+          // Jika tidak ada logbook namun merupakan hari yang lalu, tetap terisi default operasional.
+          let cellStatus = item.statusPeralatan === 'Standby' ? 'Standby' : 'Ready';
+          let cellKondisi = 'Normal';
 
           if (dayLogs.length > 0) {
             const latestLog = dayLogs[dayLogs.length - 1];
-            cellStatus = latestLog.statusPeralatan || cellStatus;
-            cellKondisi = latestLog.kondisi || cellKondisi;
+            cellStatus = latestLog.statusPeralatan || 'Ready';
+            cellKondisi = latestLog.kondisi || 'Normal';
           }
 
-          // Cek apakah ada laporan kerusakan aktif pada peralatan & hari ini
+          // Cek apakah ada laporan kerusakan aktif pada peralatan & hari tersebut
           const matchingDamage = damageReports.find(dr => {
             const drDate = parseIndonesianDate(dr.tglKerusakan || dr.tanggal);
             const drName = (dr.peralatan || '').toLowerCase().trim();
@@ -134,6 +227,10 @@ router.get('/', async (req: Request, res: Response) => {
                    (drLoc === item.lokasi.toLowerCase().trim() || !drLoc);
           });
 
+          let cellCode = '0';
+          let cellColor = 'green';
+          let cellDownHours = 0;
+
           if (cellStatus === 'Standby') {
             cellCode = '-';
             cellColor = 'yellow';
@@ -141,7 +238,6 @@ router.get('/', async (req: Request, res: Response) => {
           } else if (cellStatus === 'Damaged' || cellKondisi === 'Rusak' || matchingDamage) {
             cellCode = 'X';
             cellColor = 'red';
-            // Hitung jam terputus hari ini (default 24 jam per hari jika damaged penuh, atau dari laporan)
             const rawJam = matchingDamage?.jumlahJamTerputus;
             let hVal = 24;
             if (rawJam) {
@@ -154,7 +250,6 @@ router.get('/', async (req: Request, res: Response) => {
             cellColor = 'orange';
             cellDownHours = 0;
           } else {
-            // Normal / Ready
             cellCode = '0';
             cellColor = 'green';
             cellDownHours = 0;
@@ -240,6 +335,8 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/sync', async (_req: Request, res: Response) => {
   try {
     const allReports = await Report.find({}).lean();
+    // Bersihkan seluruh log lama sebelum sinkronisasi ulang dari laporan harian yang aktif
+    await EquipmentMonthlyLog.deleteMany({});
     let totalLogsCreated = 0;
     let totalStandbySynced = 0;
 
@@ -250,9 +347,6 @@ router.post('/sync', async (_req: Request, res: Response) => {
       const namaBulan = NAMA_BULAN[dateInfo.month - 1] || 'Oktober';
       const bulanTahun = `${namaBulan} ${dateInfo.year}`;
       const yearMonth = `${dateInfo.year}-${String(dateInfo.month).padStart(2, '0')}`;
-
-      // Hapus log lama untuk report ini jika ada agar tidak duplikat
-      await EquipmentMonthlyLog.deleteMany({ reportId: rep._id });
 
       const logsToInsert: any[] = [];
 

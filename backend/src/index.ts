@@ -215,18 +215,26 @@ app.post('/api/users/reset-password', verifyToken, requireRole(['ADMIN']), async
   } catch (error) { res.status(500).json({ message: 'Gagal mereset password' }); }
 });
 
+import EquipmentMonthlyLog from './models/EquipmentMonthlyLog';
+
 // Bersihkan otomatis semua laporan berstatus Draft yang sudah lebih dari 24 jam
 const cleanupExpiredDrafts = async () => {
   try {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    await Report.deleteMany({
+    const expiredFilter = {
       status: 'Draft',
       $or: [
         { draftExpiresAt: { $ne: null, $lt: now } },
         { draftExpiresAt: null, updatedAt: { $lt: twentyFourHoursAgo } }
       ]
-    });
+    };
+    const expiredDocs = await Report.find(expiredFilter, { _id: 1 }).lean();
+    if (expiredDocs.length > 0) {
+      const expiredIds = expiredDocs.map(d => d._id);
+      await EquipmentMonthlyLog.deleteMany({ reportId: { $in: expiredIds } });
+      await Report.deleteMany({ _id: { $in: expiredIds } });
+    }
   } catch (e) {}
 };
 
@@ -362,6 +370,7 @@ app.get('/api/reports/:id', verifyToken, async (req, res) => {
 app.delete('/api/reports/:id', verifyToken, requireRole(['ADMIN', 'SUPERVISOR', 'OFFICE']), async (req, res) => {
   try {
     await Report.findByIdAndDelete(req.params.id);
+    await EquipmentMonthlyLog.deleteMany({ reportId: req.params.id });
     res.status(200).json({ message: 'Report deleted successfully' });
   } catch (error) { res.status(500).json({ message: 'Error deleting report', error }); }
 });

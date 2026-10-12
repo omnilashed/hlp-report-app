@@ -301,16 +301,20 @@ export default function LaporanKondisiBulanan() {
 
         // Render cell hari 1 s.d. daysInMonth
         for (let d = 1; d <= daysInMonth; d++) {
-          const dayCell = item.days[d] || { code: '0', color: 'green' };
+          const dayCell = item.days[d] || { code: '', color: 'empty' };
           const cell = sheet.getCell(currentRow, startDayCol + d - 1);
-          cell.value = dayCell.code;
+          cell.value = dayCell.code ?? '';
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
           cell.font = { size: 8, bold: true };
 
-          if (dayCell.color === 'yellow') {
+          if (dayCell.color === 'empty' || dayCell.code === '') {
+            // Biarkan kosong (putih) jika belum ada logbook harian
+          } else if (dayCell.color === 'yellow') {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } }; // Light yellow
           } else if (dayCell.color === 'red') {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFCDD2' } }; // Light red
+          } else if (dayCell.color === 'orange') {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE0B2' } }; // Light orange
           } else {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } }; // Light green
           }
@@ -588,6 +592,10 @@ export default function LaporanKondisiBulanan() {
           <span className="w-5 h-5 rounded bg-orange-100 text-orange-800 flex items-center justify-center text-[10px] font-bold border border-orange-300">M</span>
           <span>Pemeliharaan / Maintenance</span>
         </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-5 h-5 rounded bg-white text-slate-400 flex items-center justify-center text-[10px] font-bold border border-slate-300"></span>
+          <span>Kosong (Belum Ada Logbook Harian)</span>
+        </div>
       </div>
 
       {/* THE MAIN MATRIX TABLE (Matching exact Injourney Airports Form) */}
@@ -683,21 +691,27 @@ export default function LaporanKondisiBulanan() {
 
                           {/* Day Columns */}
                           {daysArray.map(d => {
-                            const cell = item.days[d] || { code: '0', color: 'green' };
-                            const bgClass =
-                              cell.color === 'yellow'
-                                ? 'bg-amber-100 text-amber-900'
-                                : cell.color === 'red'
-                                ? 'bg-rose-200 text-rose-950 font-black'
-                                : cell.color === 'orange'
-                                ? 'bg-orange-100 text-orange-900'
-                                : 'bg-emerald-50 text-emerald-900';
+                            const cell = item.days[d] || { code: '', color: 'empty', downHours: 0, status: 'Belum Diisi', kondisi: '-' };
+                            const isEmpty = cell.color === 'empty' || cell.code === '';
+                            const bgClass = isEmpty
+                              ? 'bg-white text-slate-300'
+                              : cell.color === 'yellow'
+                              ? 'bg-amber-100 text-amber-900'
+                              : cell.color === 'red'
+                              ? 'bg-rose-200 text-rose-950 font-black'
+                              : cell.color === 'orange'
+                              ? 'bg-orange-100 text-orange-900'
+                              : 'bg-emerald-50 text-emerald-900';
 
                             return (
                               <td
                                 key={d}
                                 className={`border border-slate-800 p-0 text-center font-mono font-bold text-[9px] ${bgClass}`}
-                                title={`Tgl ${d}: ${cell.status} (${cell.kondisi})`}
+                                title={
+                                  isEmpty
+                                    ? `Tgl ${d}: Belum ada logbook harian`
+                                    : `Tgl ${d}: ${cell.status} (${cell.kondisi})`
+                                }
                               >
                                 {cell.code}
                               </td>
